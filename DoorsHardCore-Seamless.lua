@@ -1,21 +1,22 @@
 --=====================================================================
---  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v4)
+--  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v5)
 --  运行时换肤 + 壁纸引擎 + 光影风格包 + 中文翻译 + 开场 BGM
 -----------------------------------------------------------------------
 --  原脚本（一行未改）：
 --    https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Doors-HardCore.lua
 --
+--  v5 相对 v4：
+--    · 修：所有滑块共用同一个全局标志，导致拖一根整排一起跳 → 每根独立状态
+--    · 恢复整块面板拖动，并改成矩形命中测试：按在控件上才不拖
+--    · 壁纸 / 音乐页各加「官方上传页 / 教程」按钮（能开浏览器就开，否则复制链接）
+--    · 支持本地图片路径（tools/video2strip.py 生成的序列帧长图直接贴文件名）
+--
 --  v4 相对 v3：
---    · 修：拖动只认标题栏，拖滑块 / 列表 / 输入框不再带着整块面板跑
---    · 视频加载失败自动降级成图片，并用资产类型探测说明原因
---    · 新增「音乐」页：开场 BGM，点任意模式后循环，传送或超时自动淡出
+--    · 视频失败自动降级成图片，并用资产类型探测说明原因
+--    · 新增「音乐」页：开场 BGM，点任意模式后循环，传送或超时淡出
 --
 --  v3 相对 v2：
---    · 删掉「材质覆写」，只保留光影
---    · 光影改成「识别链接」：内置 MC 系风格 / JSON 光影包 / 图片滤色
---    · 文案换成正常中文翻译
---    · 壁纸支持视频资产循环，长图自动识别成序列帧
---    · 面板瘦身 + 窗口拖动把手
+--    · 删掉材质覆写、光影改「识别链接」、正常中文翻译、壁纸视频循环、序列帧识别
 --
 --  用法：整段粘进执行器回车；或 loadstring 远程载入
 --  面板：F2 开合
@@ -266,7 +267,8 @@ local Reg = {
 local P = {
 	gui = nil, card = nil, tabsRow = nil, content = nil,
 	renders = {}, hooks = {}, rebuildList = nil,
-	sliderBusy = false, tabButtons = {}, pages = {},
+	protect = setmetatable({}, { __mode = "k" }),
+	tabButtons = {}, pages = {},
 }
 
 local containers -- 前置声明
@@ -334,7 +336,27 @@ local function resolveImage(url)
 	if low:sub(1, 11) == "rbxassetid" then return { id = url, kind = "image" } end
 	if low:sub(1, 8) == "rbxasset" then return { id = url, kind = "image" } end
 	if AssetCache[url] then return AssetCache[url] end
-	if not low:match("^https?://") then return nil, "不认识的地址" end
+
+	-- 本地文件：tools 生成的序列帧长图等，走执行器的 getcustomasset
+	local localExt = extOf(low)
+	local localPath = nil
+	if low:sub(1, 7) == "file://" then
+		localPath = url:sub(8)
+	elseif not low:match("^https?://") and (localExt == "png" or localExt == "jpg" or localExt == "jpeg" or localExt == "webp") then
+		localPath = url
+	end
+	if localPath and type(getcustomasset) == "function" then
+		local ok, id = pcall(getcustomasset, localPath)
+		if ok and id then
+			local asset = { id = id, kind = "image", path = localPath }
+			AssetCache[url] = asset
+			return asset
+		end
+	end
+
+	if not low:match("^https?://") then
+		return nil, "认不出地址：图片直链 / 本地 png 文件名 / rbxassetid"
+	end
 	if not fileApi() then return nil, "执行器缺少 writefile / getcustomasset" end
 
 	local ok, res = pcall(function()
@@ -427,6 +449,39 @@ local function toast(msg)
 			TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1 }):Play()
 		end)
 	end)
+end
+
+--=====================================================================
+--  4.1 · 打开网页（官方上传页指引）
+--=====================================================================
+local LINKS = {
+	creations = "https://create.roblox.com/dashboard/creations",
+	docs      = "https://create.roblox.com/docs/production/publishing/uploading-assets",
+	audioDocs = "https://create.roblox.com/docs/audio/assets",
+}
+
+local function openUrl(url)
+	url = tostring(url or "")
+	if url == "" then return false end
+	if type(openbrowser) == "function" then
+		local ok = pcall(openbrowser, url)
+		if ok then return true end
+	end
+	if type(openurl) == "function" then
+		local ok = pcall(openurl, url)
+		if ok then return true end
+	end
+	if type(openUri) == "function" then
+		local ok = pcall(openUri, url)
+		if ok then return true end
+	end
+	if type(setclipboard) == "function" then
+		pcall(setclipboard, url)
+		toast("链接已复制，粘到浏览器打开")
+		return true
+	end
+	toast(url)
+	return true
 end
 
 --=====================================================================
@@ -1962,6 +2017,21 @@ local TAB_LIST = {
 	{ key = "text", name = "翻译" },
 }
 
+-- 拖动命中测试：只有按在控件上才不拖面板
+local function pointerInside(obj, point)
+	if not (obj and obj.Parent) then return false end
+	local ok, ap, as = pcall(function() return obj.AbsolutePosition, obj.AbsoluteSize end)
+	if not ok or not ap or not as then return false end
+	return point.X >= ap.X and point.X <= ap.X + as.X and point.Y >= ap.Y and point.Y <= ap.Y + as.Y
+end
+
+local function overProtected(point)
+	for obj in pairs(P.protect) do
+		if pointerInside(obj, point) then return true end
+	end
+	return false
+end
+
 local function newBuilder(scroll)
 	local b = { y = 0, scroll = scroll }
 
@@ -2048,15 +2118,26 @@ local function newBuilder(scroll)
 			render()
 		end
 
-		track.InputBegan:Connect(function(input)
+		-- 18px 高的透明抓取条，4px 的视觉轨道太难瞄
+		local hit = make("Frame", {
+			Name = "SG_Hit",
+			Size = UDim2.new(1, 0, 0, 18),
+			Position = UDim2.new(0, 0, 0, 13),
+			BackgroundTransparency = 1,
+			Parent = row,
+		})
+
+		-- 每根滑块各自持有 active，绝不共用全局标志（否则拖一根，全排一起跳）
+		local active = false
+		hit.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1
 				or input.UserInputType == Enum.UserInputType.Touch then
-				P.sliderBusy = true
+				active = true
 				commit(input)
 			end
 		end)
 		UserInputService.InputChanged:Connect(function(input)
-			if not P.sliderBusy then return end
+			if not active then return end
 			if input.UserInputType == Enum.UserInputType.MouseMovement
 				or input.UserInputType == Enum.UserInputType.Touch then
 				commit(input)
@@ -2065,9 +2146,10 @@ local function newBuilder(scroll)
 		UserInputService.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1
 				or input.UserInputType == Enum.UserInputType.Touch then
-				P.sliderBusy = false
+				active = false
 			end
 		end)
+		P.protect[hit] = true
 
 		table.insert(P.renders, render)
 		render()
@@ -2128,6 +2210,7 @@ local function newBuilder(scroll)
 			set(not get())
 			render()
 		end)
+		P.protect[row] = true
 
 		table.insert(P.renders, render)
 		render()
@@ -2169,6 +2252,7 @@ local function newBuilder(scroll)
 			onNext()
 			render()
 		end)
+		P.protect[btn] = true
 		table.insert(P.renders, render)
 		render()
 		return row
@@ -2193,6 +2277,7 @@ local function newBuilder(scroll)
 			})
 			make("UICorner", { CornerRadius = UDim.new(0, 7), Parent = btn })
 			btn.MouseButton1Click:Connect(sp.cb)
+			P.protect[btn] = true
 			table.insert(P.hooks, function()
 				btn.TextColor3 = T.text
 				btn.BackgroundColor3 = sp.accent and T.accent or T.tint2
@@ -2222,8 +2307,6 @@ local function newBuilder(scroll)
 		})
 		make("UICorner", { CornerRadius = UDim.new(0, 7), Parent = box })
 		make("UIPadding", { PaddingLeft = UDim.new(0, 7), PaddingRight = UDim.new(0, 5), Parent = box })
-		box.Focused:Connect(function() P.sliderBusy = true end)
-		box.FocusLost:Connect(function() P.sliderBusy = false end)
 		local btn = make("TextButton", {
 			Text = buttonText,
 			Size = UDim2.new(0, 52, 0, 24),
@@ -2239,6 +2322,7 @@ local function newBuilder(scroll)
 		})
 		make("UICorner", { CornerRadius = UDim.new(0, 7), Parent = btn })
 		btn.MouseButton1Click:Connect(function() onApply(box) end)
+		P.protect[row] = true
 		table.insert(P.hooks, function()
 			box.TextColor3 = T.text
 			box.BackgroundColor3 = T.tint2
@@ -2331,7 +2415,7 @@ local function buildPanel()
 		Parent = header,
 	})
 	local hint = make("TextLabel", {
-		Text = "按住上方这一条拖动 · F2 隐藏",
+		Text = "整块可拖（按控件上不会带动）· F2 隐藏",
 		Size = UDim2.new(1, -110, 0, 10),
 		Position = UDim2.new(0, 26, 0, 25),
 		BackgroundTransparency = 1,
@@ -2449,6 +2533,7 @@ local function buildPanel()
 		})
 		make("UICorner", { CornerRadius = UDim.new(0, 7), Parent = btn })
 		btn.MouseButton1Click:Connect(function() selectTab(tab.key) end)
+		P.protect[btn] = true
 		P.tabButtons[tab.key] = btn
 	end
 
@@ -2547,6 +2632,7 @@ local function buildPanel()
 		Parent = bw.scroll,
 	})
 	make("UICorner", { CornerRadius = UDim.new(0, 8), Parent = list })
+	P.protect[list] = true
 	bw.y = bw.y + 68
 
 	local BADGE = { image = "图", strip = "帧", video = "视" }
@@ -2654,6 +2740,11 @@ local function buildPanel()
 			if P.save then pcall(P.save) end
 		end },
 	})
+	bw.buttons({
+		{ text = "视频上传页", accent = true, cb = function() openUrl(LINKS.creations) end },
+		{ text = "上传教程", cb = function() openUrl(LINKS.docs) end },
+	})
+	bw.note("官方只收平台资产：Creator Dashboard → Development Items → Videos 传 mp4，审核通过后复制视频 id 贴上面。本地 mp4 想免上传，用 tools/video2strip.py 转成序列帧长图，再贴文件名。", 46)
 	bw.finish()
 
 	--──────── 光影 ────────
@@ -2779,7 +2870,12 @@ local function buildPanel()
 			toast("已停止")
 		end },
 	})
-	bm.note("Roblox 只能用平台内的音频资产：50 秒内的曲子传到 Creator → Audio，用审核通过的音频 id 贴进来；mp3 直链播不了。", 46)
+	bm.note("Roblox 只能用平台内的音频资产：50 秒内的曲子传到 Creator → Audio，用审核通过的音频 id 贴进来；mp3 直链播不了。", 32)
+	bm.buttons({
+		{ text = "音频上传页", accent = true, cb = function() openUrl(LINKS.creations) end },
+		{ text = "音频文档", cb = function() openUrl(LINKS.audioDocs) end },
+	})
+	bm.note("第三方 mp3 想变成 Roblox 音频：先跑 tools/audio_check.py 体检（时长 ≤50 秒、体积、码率），再去上传页传，复制审核通过的 id。", 46)
 	bm.finish()
 
 	selectTab(T.tab or "look")
@@ -2797,18 +2893,31 @@ local function buildPanel()
 	closeBtn.MouseButton1Click:Connect(function()
 		gui.Enabled = false
 	end)
+	P.protect[collapse] = true
+	P.protect[closeBtn] = true
 
-	-- 拖动只认标题栏这一条，避免拖滑块/列表时整块面板跟着跑
+	-- 拖动：整块面板都能拖，但按在滑块/按钮/输入框/列表上时不拖（矩形命中测试，不依赖事件顺序）
 	local dragging, startPos, startMouse = false, nil, nil
+	local function beginDrag(input)
+		local p = Vector2.new(input.Position.X, input.Position.Y)
+		if overProtected(p) then return end
+		dragging = true
+		startPos = card.Position
+		startMouse = input.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then dragging = false end
+		end)
+	end
+	card.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			beginDrag(input)
+		end
+	end)
 	header.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			startPos = card.Position
-			startMouse = input.Position
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then dragging = false end
-			end)
+			beginDrag(input)
 		end
 	end)
 	UserInputService.InputChanged:Connect(function(input)
@@ -3196,7 +3305,7 @@ if getgenv and getgenv().SEAMLESS_DHC and getgenv().SEAMLESS_DHC.destroy then
 	pcall(getgenv().SEAMLESS_DHC.destroy)
 end
 
-print("[SG] Doors HardCore · 无痕玻璃 v4 启动")
+print("[SG] Doors HardCore · 无痕玻璃 v5 启动")
 
 local okBoot, errBoot = pcall(boot)
 if not okBoot then warn("[SG] 启动失败: " .. tostring(errBoot)) end
