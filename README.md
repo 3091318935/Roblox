@@ -1,4 +1,4 @@
-# Doors HardCore · 无痕玻璃 Seamless Glass（v5）
+# Doors HardCore · 无痕玻璃 Seamless Glass（v6）
 
 把 **Doors-HardCore**（源：`https://pastefy.app/Bf6hbDY4/raw`，备用 `Zero0Star/RipperNewSound` 的 raw）的界面，换成「无缝透明边框 + 壁纸 + 光影 + 中文 + 开场 BGM」的样子。
 
@@ -7,6 +7,17 @@
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/main/DoorsHardCore-Seamless.lua"))()
 ```
+
+---
+
+## v6 改了什么
+
+| 需求 | 处理 |
+| --- | --- |
+| **字体太大、不好看** | 字族换成 Gotham / GothamSemibold（细一档），面板文字统一再缩 12%；「外观」页加 **面板字号** 0.8~1.3 与 **原界面字号** 0.75~1.2 两根滑杆 |
+| **壁纸加载太突兀** | 装载时蒙版 0→透明淡入；每次换壁纸 / 重新播放都会重新淡入 |
+| **壁纸盖住 UI、挡住调整** | 壁纸层始终在 `DisplayOrder = -10`（所有 UI 之下），并新增「柔化到背景」：浓度 ×0.6、压暗 +0.10、上下压边；面板底色不透明度提到 0.82，文字更清楚 |
+| **关掉窗口后还在** | 菜单关闭 → 蒙版淡出后整层 `Enabled = false`；再打开 → 淡入。时长可调 0.2~2s |
 
 ---
 
@@ -29,7 +40,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/mai
 
 | 文件 | 说明 |
 | --- | --- |
-| `DoorsHardCore-Seamless.lua` | v5 引擎主体，单文件、无依赖 |
+| `DoorsHardCore-Seamless.lua` | v6 引擎主体，单文件、无依赖 |
 | `DoorsHardCore-LiquidGlass.lua` | v1 液态玻璃版，备份 |
 | `loader.lua` | 一行启动器 |
 | `tools/video2strip.py` | 本地 mp4 / gif → 序列帧长图（免上传用动画壁纸） |
@@ -51,7 +62,9 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/mai
 
 ### 外观
 
-模糊 / 压暗 / 玻璃 / 描边 / 圆角 / 缩放；开关：无缝边框、顶部高光、窗口拖动把手；6 色板 + 色调滑杆。
+模糊 / 压暗 / 玻璃 / 描边 / 圆角 / 缩放 / **面板字号 0.8~1.3** / **原界面字号 0.75~1.2**；开关：无缝边框、顶部高光、窗口拖动把手；6 色板 + 色调滑杆。
+
+字号这两根是分开的：一根管我们这块调参面板，一根管被换肤的原菜单文字，避免“面板好看了但原菜单还是很大”。
 
 ### 壁纸
 
@@ -64,6 +77,12 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/mai
 | 长条拼图（宽÷高 = 整数且 ≥3） | 序列帧 | 自动切帧循环 |
 | 本地文件名，如 `clip_strip.png` | 本地图片（走 `getcustomasset`） | 同上 |
 | 视频 id / `roblox.com/videos/…` | 视频 | `VideoFrame` 循环 + 续播 |
+
+播放控制：播放方式 / 停留 / 速度 / **壁纸浓度** / **柔化到背景** / **淡入淡出 0.2~2s** / 极光 / 光尘 / 仅菜单显示时出现。
+
+- **柔化到背景**：浓度自动 ×0.6、压暗 +0.10、上下压边，壁纸只当背景光，不抢 UI；
+- 壁纸层固定 `DisplayOrder = -10`，永远在菜单和我们这块面板下面，且不注册任何输入；
+- 菜单关闭 → 淡出后整层隐藏；再打开 → 淡入。
 
 页底两个按钮：**视频上传页** / **上传教程**（`openbrowser` → `openurl` → 复制链接，逐级降级）。
 
@@ -114,11 +133,12 @@ local CONFIG = {
     runOriginal = true,
     waitTimeout = 30, watchSeconds = 120,
     panelKey    = Enum.KeyCode.F2,
-    theme = { accent = Color3.fromRGB(0,200,0), glass = 0.74, border = 0.30,
+    theme = { accent = Color3.fromRGB(0,200,0), glass = 0.82, border = 0.30,
               corner = 14, scale = 1, seamless = true, chrome = true,
-              translate = true, grip = true },
-    backdrop = { items = {}, mode = "auto", hold = 8, speed = 1, dim = 0.18,
-                 wall = 0.95, aurora = true, dust = false, blur = 8, followWindow = true },
+              translate = true, grip = true, uiFont = 1.0, textScale = 1.0 },
+    backdrop = { items = {}, mode = "auto", hold = 8, speed = 1, dim = 0.22,
+                 wall = 0.80, soft = true, fade = 0.85,
+                 aurora = true, dust = false, blur = 8, followWindow = true },
     shade = { preset = "vanilla", power = 1 },
 }
 ```
