@@ -2,7 +2,7 @@
 --  Doors HardCore  ·  Liquid Glass Edition
 --  为原脚本外挂一层「液态玻璃」换肤引擎（不改原脚本、不重打包）
 -----------------------------------------------------------------------
---  原脚本： https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Doors-HardCore.lua
+--  原脚本： https://pastefy.app/Bf6hbDY4/raw
 --  风格参考：DSH 壁纸引擎（玻璃面 / 发丝渐变描边 / 顶部高光 / 壁纸 / 场景模糊 / #00C800）
 --
 --  用法：整段粘进执行器回车；或自己传到 gist 后 loadstring 远程载入。
@@ -12,7 +12,7 @@
 --=====================================================================
 
 local CONFIG = {
-	scriptUrl   = "https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Doors-HardCore.lua",
+	scriptUrl   = "https://pastefy.app/Bf6hbDY4/raw",
 	runOriginal = true,     -- 是否执行原脚本（只想看换肤效果时设 false）
 	waitTimeout = 30,       -- 等待原脚本创建界面的最长秒数
 	watchSeconds = 60,      -- 之后继续监听新界面元素的秒数
