@@ -1,6 +1,6 @@
 # Doors HardCore · 无痕玻璃 Seamless Glass（v5）
 
-把 `Zero0Star/RipperNewSound` 里 **Doors-HardCore.lua** 的界面，换成「无缝透明边框 + 壁纸 + 光影 + 中文 + 开场 BGM」的样子。
+把 **Doors-HardCore**（源：`https://pastefy.app/Bf6hbDY4/raw`，备用 `Zero0Star/RipperNewSound` 的 raw）的界面，换成「无缝透明边框 + 壁纸 + 光影 + 中文 + 开场 BGM」的样子。
 
 原脚本 **一行都没改**：它照常联网、照常跑 key 系统、照常工作；皮肤是它把界面建出来之后，在运行时逐层重绘上去的。
 
@@ -21,7 +21,11 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/mai
 
 ---
 
-## 文件
+## v5.1 小改
+
+- 原脚本地址换成 `https://pastefy.app/Bf6hbDY4/raw`（内容与原 GitHub 版一致）；
+- 加了 `fallbackUrl`：pastefy 挂了或被限流，会自动回落 GitHub raw，控制台会打印实际使用的来源；
+- 两个源都拉不到时只弹提示，皮肤照常能用。
 
 | 文件 | 说明 |
 | --- | --- |
@@ -105,7 +109,8 @@ python tools\audio_check.py song.mp3 --trim 45
 
 ```lua
 local CONFIG = {
-    scriptUrl   = ".../Doors-HardCore.lua",
+    scriptUrl   = "https://pastefy.app/Bf6hbDY4/raw",
+    fallbackUrl = "https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Doors-HardCore.lua",
     runOriginal = true,
     waitTimeout = 30, watchSeconds = 120,
     panelKey    = Enum.KeyCode.F2,
