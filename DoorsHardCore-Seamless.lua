@@ -1,10 +1,13 @@
 --=====================================================================
---  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v5)
+--  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v5.1)
 --  运行时换肤 + 壁纸引擎 + 光影风格包 + 中文翻译 + 开场 BGM
 -----------------------------------------------------------------------
 --  原脚本（一行未改）：
---    https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Doors-HardCore.lua
+--    https://pastefy.app/Bf6hbDY4/raw
+--    备用源： https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Doors-HardCore.lua
 --
+--  v5.1：
+--    · 原脚本地址换到 pastefy（Bf6hbDY4），拉取失败自动回落到 GitHub 备用源
 --  v5 相对 v4：
 --    · 修：所有滑块共用同一个全局标志，导致拖一根整排一起跳 → 每根独立状态
 --    · 恢复整块面板拖动，并改成矩形命中测试：按在控件上才不拖
@@ -23,7 +26,8 @@
 --=====================================================================
 
 local CONFIG = {
-	scriptUrl    = "https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Doors-HardCore.lua",
+	scriptUrl    = "https://pastefy.app/Bf6hbDY4/raw",
+	fallbackUrl  = "https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Doors-HardCore.lua",
 	runOriginal  = true,
 	waitTimeout  = 30,
 	watchSeconds = 120,
@@ -2989,11 +2993,27 @@ local function newScreenGuis(old)
 end
 
 local function runOriginal()
-	local okHttp, src = pcall(function() return game:HttpGet(CONFIG.scriptUrl, true) end)
-	if not okHttp or type(src) ~= "string" or #src < 100 then
-		warn("[SG] 拉取原脚本失败: " .. tostring(src))
+	local urls = { CONFIG.scriptUrl }
+	if CONFIG.fallbackUrl and CONFIG.fallbackUrl ~= "" then
+		table.insert(urls, CONFIG.fallbackUrl)
+	end
+
+	local src, used = nil, nil
+	for _, u in ipairs(urls) do
+		local okHttp, body = pcall(function() return game:HttpGet(u, true) end)
+		if okHttp and type(body) == "string" and #body >= 100 then
+			src, used = body, u
+			break
+		else
+			warn("[SG] 拉取失败: " .. tostring(u) .. " -> " .. tostring(body))
+		end
+	end
+	if not src then
+		toast("原脚本一个源都没拉下来，皮肤仍然可用")
 		return
 	end
+	print("[SG] 原脚本来源: " .. tostring(used))
+
 	local compile = loadstring or load
 	if not compile then
 		warn("[SG] 执行器没有 loadstring")
@@ -3305,7 +3325,7 @@ if getgenv and getgenv().SEAMLESS_DHC and getgenv().SEAMLESS_DHC.destroy then
 	pcall(getgenv().SEAMLESS_DHC.destroy)
 end
 
-print("[SG] Doors HardCore · 无痕玻璃 v5 启动")
+print("[SG] Doors HardCore · 无痕玻璃 v5.1 启动（源：pastefy Bf6hbDY4）")
 
 local okBoot, errBoot = pcall(boot)
 if not okBoot then warn("[SG] 启动失败: " .. tostring(errBoot)) end
