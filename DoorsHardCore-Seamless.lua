@@ -1,5 +1,5 @@
 --=====================================================================
---  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v5.1)
+--  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v6)
 --  运行时换肤 + 壁纸引擎 + 光影风格包 + 中文翻译 + 开场 BGM
 -----------------------------------------------------------------------
 --  原脚本（一行未改）：
@@ -8,6 +8,12 @@
 --
 --  v5.1：
 --    · 原脚本地址换到 pastefy（Bf6hbDY4），拉取失败自动回落到 GitHub 备用源
+--  v6：
+--    · 字体整体换细、字号缩小 12%，面板加「面板字号 / 原界面字号」两根滑杆
+--    · 壁纸改成柔化背景层：更透 + 更强压暗 + 上下压边，退到 UI 后面
+--    · 壁纸淡入（装载时）与淡出（菜单关闭时），时长可调 0.2~2s
+--    · 壁纸不再抢占视觉中心，调参面板默认更不透明，文字更清楚
+--
 --  v5 相对 v4：
 --    · 修：所有滑块共用同一个全局标志，导致拖一根整排一起跳 → 每根独立状态
 --    · 恢复整块面板拖动，并改成矩形命中测试：按在控件上才不拖
@@ -35,7 +41,7 @@ local CONFIG = {
 
 	theme = {
 		accent    = Color3.fromRGB(0, 200, 0),
-		glass     = 0.74,
+		glass     = 0.82,
 		border    = 0.30,
 		corner    = 14,
 		scale     = 1,
@@ -43,14 +49,18 @@ local CONFIG = {
 		chrome    = true,
 		translate = true,
 		grip      = true,
+		uiFont    = 1.0,    -- 面板字号倍率
+		textScale = 1.0,    -- 原界面字号倍率
 	},
 	backdrop = {
 		items        = {},
 		mode         = "auto",   -- auto / still / pan / cross / strip / video / aurora
 		hold         = 8,
 		speed        = 1,
-		dim          = 0.18,
-		wall         = 0.95,
+		dim          = 0.22,
+		wall         = 0.80,     -- 默认就淡一些，退到 UI 后面
+		soft         = true,     -- 柔化：更透明 + 更强压暗 + 四边晕影
+		fade         = 0.85,     -- 淡入淡出秒数
 		aurora       = true,
 		dust         = false,
 		blur         = 8,
@@ -97,8 +107,8 @@ local function fontOf(name, fb)
 	if ok and f then return f end
 	return fb
 end
-local FONT_BODY = fontOf("GothamMedium", Enum.Font.SourceSansSemibold)
-local FONT_BOLD = fontOf("GothamBold", Enum.Font.SourceSansBold)
+local FONT_BODY = fontOf("Gotham", Enum.Font.SourceSans)
+local FONT_BOLD = fontOf("GothamSemibold", Enum.Font.SourceSansSemibold)
 
 local function make(class, props, children)
 	local o = Instance.new(class)
@@ -230,12 +240,16 @@ local T = {
 	chrome    = CONFIG.theme.chrome,
 	translate = CONFIG.theme.translate,
 	grip      = CONFIG.theme.grip,
+	uiFont    = CONFIG.theme.uiFont,
+	textScale = CONFIG.theme.textScale,
 
 	mode         = CONFIG.backdrop.mode,
 	hold         = CONFIG.backdrop.hold,
 	speed        = CONFIG.backdrop.speed,
 	dim          = CONFIG.backdrop.dim,
 	wallAlpha    = CONFIG.backdrop.wall,
+	wallSoft     = CONFIG.backdrop.soft,
+	wallFade     = CONFIG.backdrop.fade,
 	aurora       = CONFIG.backdrop.aurora,
 	dust         = CONFIG.backdrop.dust,
 	blur         = CONFIG.backdrop.blur,
@@ -258,6 +272,7 @@ local Reg = {
 	origBT = setmetatable({}, { __mode = "k" }),
 	origTx = setmetatable({}, { __mode = "k" }),
 	origSt = setmetatable({}, { __mode = "k" }),
+	origTS = setmetatable({}, { __mode = "k" }),
 	mapOut = setmetatable({}, { __mode = "k" }),
 	corner = setmetatable({}, { __mode = "k" }),
 	stroke = setmetatable({}, { __mode = "k" }),
@@ -493,8 +508,10 @@ end
 --=====================================================================
 local Wall = {
 	gui = nil, holder = nil, layerA = nil, layerB = nil, video = nil,
-	scrim = nil, vig = nil, aurora = nil, dust = nil, front = nil,
+	scrim = nil, vig = nil, vigTop = nil, mask = nil,
+	aurora = nil, dust = nil, front = nil,
 	gen = 0, idx = 1, items = {}, fading = false, note = "还没有壁纸",
+	visible = true, fadeToken = 0,
 }
 
 local function wallGui()
@@ -619,14 +636,57 @@ local function wallGui()
 		Parent = holder,
 	})
 
+	-- 顶部压边，柔化后四边都收一点，画面不会硬切到屏幕边缘
+	local vigTop = make("Frame", {
+		Name = "SG_VignetteTop",
+		Size = UDim2.new(1, 0, 0.42, 0),
+		Position = UDim2.new(0, 0, 0, 0),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.55,
+		BorderSizePixel = 0,
+		ZIndex = 5,
+		Parent = holder,
+	})
+	make("UIGradient", {
+		Rotation = 270,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(1, 0.35),
+		}),
+		Parent = vigTop,
+	})
+	Wall.vigTop = vigTop
+
+	-- 淡入淡出蒙版：盖在壁纸之上、UI 之下
+	Wall.mask = make("Frame", {
+		Name = "SG_Mask",
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 8,
+		Parent = holder,
+	})
+
 	return gui
 end
 
-local function frontAlpha() return 1 - clamp(T.wallAlpha, 0, 1) end
+-- 柔化后壁纸整体更淡，退到 UI 后面
+local function frontAlpha()
+	local a = clamp(T.wallAlpha, 0, 1)
+	if T.wallSoft then a = a * 0.6 end
+	return 1 - clamp(a, 0, 1)
+end
+
+local function scrimAlpha()
+	local d = clamp(T.dim, 0, 0.95)
+	if T.wallSoft then d = clamp(d + 0.10, 0, 0.95) end
+	return d
+end
 
 local function applyLook()
 	if not (Wall.gui and Wall.gui.Parent) then return end
-	if Wall.scrim then Wall.scrim.BackgroundTransparency = 1 - clamp(T.dim, 0, 0.95) end
+	if Wall.scrim then Wall.scrim.BackgroundTransparency = 1 - scrimAlpha() end
 	if not Wall.fading then
 		if Wall.layerA then Wall.layerA.ImageTransparency = (Wall.front == Wall.layerA) and frontAlpha() or 1 end
 		if Wall.layerB then Wall.layerB.ImageTransparency = (Wall.front == Wall.layerB) and frontAlpha() or 1 end
@@ -644,6 +704,48 @@ local function applyLook()
 		end
 	end
 	if Wall.dust then Wall.dust.Visible = T.dust end
+	if Wall.vig then Wall.vig.Visible = true end
+	if Wall.vigTop then Wall.vigTop.Visible = T.wallSoft end
+end
+
+-- 淡入：蒙版从黑到透明；淡出：从透明到黑，结束后整层隐藏
+function Wall.show()
+	if not (Wall.gui and Wall.gui.Parent) then wallGui() end
+	if not (Wall.gui and Wall.gui.Parent) then return end
+	Wall.fadeToken = (Wall.fadeToken or 0) + 1
+	Wall.visible = true
+	Wall.gui.Enabled = true
+	applyLook()
+	if Wall.mask then
+		if #Wall.items > 0 then
+			Wall.mask.BackgroundTransparency = 0
+			TweenService:Create(Wall.mask, TweenInfo.new(T.wallFade or 0.85, Enum.EasingStyle.Sine), {
+				BackgroundTransparency = 1,
+			}):Play()
+		else
+			Wall.mask.BackgroundTransparency = 1
+		end
+	end
+end
+
+function Wall.hide()
+	if not (Wall.gui and Wall.gui.Parent) then return end
+	Wall.visible = false
+	Wall.fadeToken = (Wall.fadeToken or 0) + 1
+	local my = Wall.fadeToken
+	local hasWall = #Wall.items > 0
+	local dur = (T.wallFade or 0.85)
+	if Wall.mask and hasWall then
+		TweenService:Create(Wall.mask, TweenInfo.new(dur, Enum.EasingStyle.Sine), {
+			BackgroundTransparency = 0,
+		}):Play()
+	end
+	schedule(function()
+		pause((hasWall and dur or 0.02) + 0.06)
+		if Wall.fadeToken ~= my then return end
+		if Wall.gui and Wall.gui.Parent then Wall.gui.Enabled = false end
+		if Wall.mask then Wall.mask.BackgroundTransparency = 1 end
+	end)
 end
 
 local function kenBurns(layer)
@@ -751,6 +853,14 @@ function Wall.play()
 		stopVideo()
 		Wall.front = nil
 		return
+	end
+
+	-- 每次重新装载都先淡入，避免整块壁纸「啪」地砸出来
+	if Wall.mask then
+		Wall.mask.BackgroundTransparency = 0
+		TweenService:Create(Wall.mask, TweenInfo.new(T.wallFade or 0.85, Enum.EasingStyle.Sine), {
+			BackgroundTransparency = 1,
+		}):Play()
 	end
 
 	schedule(function()
@@ -1703,6 +1813,10 @@ local function applyText(o)
 	local base = Reg.origTx[o] or T.text
 	o.TextColor3 = readable(base)
 	o.TextStrokeTransparency = 1
+	local baseSize = Reg.origTS[o]
+	if baseSize and baseSize > 0 and not o.TextScaled then
+		o.TextSize = math.max(7, math.floor(baseSize * (T.textScale or 1) + 0.5))
+	end
 	o.Font = ((o.TextSize or 14) >= 18) and FONT_BOLD or FONT_BODY
 end
 
@@ -1898,6 +2012,7 @@ local function dress(g)
 		if g:IsA("TextLabel") or g:IsA("TextButton") or g:IsA("TextBox") then
 			Reg.origTx[g] = g.TextColor3
 			Reg.origSt[g] = g.Text
+			Reg.origTS[g] = g.TextSize
 			Reg.text[g] = true
 			applyText(g)
 			applyString(g)
@@ -1975,7 +2090,7 @@ local function refreshNow()
 	for _, grip in pairs(Reg.grips) do
 		if grip.Parent then grip.Visible = T.grip end
 	end
-	if Wall.scrim then Wall.scrim.BackgroundTransparency = 1 - clamp(T.dim, 0, 0.95) end
+	if Wall.scrim then Wall.scrim.BackgroundTransparency = 1 - scrimAlpha() end
 	local blur = Lighting:FindFirstChild("SG_SceneBlur")
 	if blur then blur.Size = T.blur end
 	applyLook()
@@ -2361,9 +2476,28 @@ local function newBuilder(scroll)
 	return b
 end
 
+-- 面板字号：统一乘一个基准缩小系数，再用 T.uiFont 动态调
+local panelFontBase = setmetatable({}, { __mode = "k" })
+
+local function applyPanelFonts()
+	for o, base in pairs(panelFontBase) do
+		if o.Parent then
+			o.TextSize = math.max(7, math.floor(base * (T.uiFont or 1) + 0.5))
+		end
+	end
+end
+
+local function collectPanelFonts(root)
+	for _, d in ipairs(root:GetDescendants()) do
+		if (d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox")) and not panelFontBase[d] then
+			panelFontBase[d] = math.max(7, math.floor(d.TextSize * 0.88 + 0.5))
+		end
+	end
+	applyPanelFonts()
+end
+
 local function buildPanel()
 	if P.gui and P.gui.Parent then return end
-
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "SG_Panel"
 	gui.IgnoreGuiInset = true
@@ -2607,6 +2741,14 @@ local function buildPanel()
 		T.accent = Color3.fromHSV(v, math.max(0.25, s), math.max(0.55, val))
 		refresh()
 	end)
+	bl.slider("面板字号", 0.8, 1.3, 0.01, function() return T.uiFont end, function(v)
+		T.uiFont = v
+		applyPanelFonts()
+	end)
+	bl.slider("原界面字号", 0.75, 1.2, 0.01, function() return T.textScale end, function(v)
+		T.textScale = v
+		refresh()
+	end)
 	bl.finish()
 
 	--──────── 壁纸 ────────
@@ -2707,6 +2849,7 @@ local function buildPanel()
 				if P.save then pcall(P.save) end
 			end)
 		end
+		collectPanelFonts(list)
 	end
 	P.rebuildList = rebuildList
 
@@ -2735,7 +2878,14 @@ local function buildPanel()
 		T.dust = v
 		applyLook()
 	end)
-	bw.switch("仅菜单显示时出现", function() return T.followWindow end, function(v) T.followWindow = v end)
+	bw.switch("仅菜单显示时出现（关闭即淡出）", function() return T.followWindow end, function(v) T.followWindow = v end)
+	bw.switch("柔化到背景", function() return T.wallSoft end, function(v)
+		T.wallSoft = v
+		applyLook()
+	end)
+	bw.slider("淡入淡出", 0.2, 2, 0.01, function() return T.wallFade end, function(v)
+		T.wallFade = v
+	end)
 	bw.buttons({
 		{ text = "重新播放", cb = function() Wall.play() end },
 		{ text = "清空", cb = function()
@@ -2946,6 +3096,7 @@ local function buildPanel()
 	end)
 
 	rebuildList()
+	collectPanelFonts(card)
 end
 
 --=====================================================================
@@ -3108,12 +3259,15 @@ local function startLive()
 					blur.Enabled = T.blur > 0
 				end
 			end
-			if Wall.gui and Wall.gui.Parent then
-				if T.followWindow and next(Reg.windows) ~= nil then
-					if Wall.gui.Enabled ~= anyVisible then Wall.gui.Enabled = anyVisible end
-				elseif not Wall.gui.Enabled then
-					Wall.gui.Enabled = true
+			-- 壁纸跟着菜单显隐，但走淡入淡出，不再「啪」地切换
+			if T.followWindow and next(Reg.windows) ~= nil then
+				if anyVisible and not Wall.visible then
+					Wall.show()
+				elseif (not anyVisible) and Wall.visible then
+					Wall.hide()
 				end
+			elseif not Wall.visible then
+				Wall.show()
 			end
 			if Wall.aurora then Wall.aurora.Visible = T.aurora end
 		end
@@ -3185,7 +3339,9 @@ local function saveState()
 		accent = { round(T.accent.R * 255), round(T.accent.G * 255), round(T.accent.B * 255) },
 		glass = T.glass, border = T.border, corner = T.corner, scale = T.scale,
 		seamless = T.seamless, chrome = T.chrome, translate = T.translate, grip = T.grip,
+		uiFont = T.uiFont, textScale = T.textScale,
 		mode = T.mode, hold = T.hold, speed = T.speed, dim = T.dim, wall = T.wallAlpha,
+		wallSoft = T.wallSoft, wallFade = T.wallFade,
 		aurora = T.aurora, dust = T.dust, blur = T.blur, followWindow = T.followWindow,
 		shade = Shade.profileKey, shadePower = T.shadePower,
 		music = Music.url, musicVolume = Music.volume, musicLoop = Music.loop,
@@ -3228,6 +3384,10 @@ local function loadState()
 	T.dust = bool(d.dust, T.dust)
 	T.blur = num(d.blur, T.blur)
 	T.followWindow = bool(d.followWindow, T.followWindow)
+	T.uiFont = num(d.uiFont, T.uiFont)
+	T.textScale = num(d.textScale, T.textScale)
+	T.wallSoft = bool(d.wallSoft, T.wallSoft)
+	T.wallFade = num(d.wallFade, T.wallFade)
 	T.shadePower = num(d.shadePower, T.shadePower)
 	if type(d.shade) == "string" and SHADES[d.shade] then Shade.profileKey = d.shade end
 	Music.volume = num(d.musicVolume, Music.volume)
@@ -3262,6 +3422,7 @@ local function boot()
 	end
 
 	Wall.refresh()
+	Wall.show()
 	ensureBlur()
 	buildPanel()
 	bindKey()
@@ -3325,7 +3486,7 @@ if getgenv and getgenv().SEAMLESS_DHC and getgenv().SEAMLESS_DHC.destroy then
 	pcall(getgenv().SEAMLESS_DHC.destroy)
 end
 
-print("[SG] Doors HardCore · 无痕玻璃 v5.1 启动（源：pastefy Bf6hbDY4）")
+print("[SG] Doors HardCore · 无痕玻璃 v6 启动（源：pastefy Bf6hbDY4）")
 
 local okBoot, errBoot = pcall(boot)
 if not okBoot then warn("[SG] 启动失败: " .. tostring(errBoot)) end
