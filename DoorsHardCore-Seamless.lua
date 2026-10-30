@@ -1,5 +1,5 @@
 --=====================================================================
---  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v6)
+--  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v7)
 --  运行时换肤 + 壁纸引擎 + 光影风格包 + 中文翻译 + 开场 BGM
 -----------------------------------------------------------------------
 --  原脚本（一行未改）：
@@ -8,11 +8,15 @@
 --
 --  v5.1：
 --    · 原脚本地址换到 pastefy（Bf6hbDY4），拉取失败自动回落到 GitHub 备用源
+--  v7：
+--    · 删掉淡入淡出动画，显隐直接开关
+--    · 背景雾化重做：壁纸替身叠层（放大 + 更透）+ 四边压暗 + 浓度衰减，主 UI 不受干扰
+--    · 字号：面板正文调大（×1.12），标题压小；原界面超 20px 的大标题再压 28%
+--    · 壁纸收藏：链接单独存 SG_Wallpapers.json，启动自动载入，可手动存/取
+--
 --  v6：
---    · 字体整体换细、字号缩小 12%，面板加「面板字号 / 原界面字号」两根滑杆
---    · 壁纸改成柔化背景层：更透 + 更强压暗 + 上下压边，退到 UI 后面
---    · 壁纸淡入（装载时）与淡出（菜单关闭时），时长可调 0.2~2s
---    · 壁纸不再抢占视觉中心，调参面板默认更不透明，文字更清楚
+--    · 字体换细一档、字号可调
+--    · 壁纸柔化 + 淡入淡出（v7 已替换为雾化）
 --
 --  v5 相对 v4：
 --    · 修：所有滑块共用同一个全局标志，导致拖一根整排一起跳 → 每根独立状态
@@ -49,7 +53,7 @@ local CONFIG = {
 		chrome    = true,
 		translate = true,
 		grip      = true,
-		uiFont    = 1.0,    -- 面板字号倍率
+		uiFont    = 1.12,   -- 面板字号倍率（正文大一点，标题单独压小）
 		textScale = 1.0,    -- 原界面字号倍率
 	},
 	backdrop = {
@@ -59,8 +63,7 @@ local CONFIG = {
 		speed        = 1,
 		dim          = 0.22,
 		wall         = 0.80,     -- 默认就淡一些，退到 UI 后面
-		soft         = true,     -- 柔化：更透明 + 更强压暗 + 四边晕影
-		fade         = 0.85,     -- 淡入淡出秒数
+		frost        = 0.7,      -- 背景雾化强度 0~1（0 = 关）
 		aurora       = true,
 		dust         = false,
 		blur         = 8,
@@ -248,8 +251,7 @@ local T = {
 	speed        = CONFIG.backdrop.speed,
 	dim          = CONFIG.backdrop.dim,
 	wallAlpha    = CONFIG.backdrop.wall,
-	wallSoft     = CONFIG.backdrop.soft,
-	wallFade     = CONFIG.backdrop.fade,
+	wallBlur     = CONFIG.backdrop.frost,
 	aurora       = CONFIG.backdrop.aurora,
 	dust         = CONFIG.backdrop.dust,
 	blur         = CONFIG.backdrop.blur,
@@ -511,7 +513,7 @@ local Wall = {
 	scrim = nil, vig = nil, vigTop = nil, mask = nil,
 	aurora = nil, dust = nil, front = nil,
 	gen = 0, idx = 1, items = {}, fading = false, note = "还没有壁纸",
-	visible = true, fadeToken = 0,
+	visible = true, ghostA = nil, ghostB = nil,
 }
 
 local function wallGui()
@@ -552,6 +554,24 @@ local function wallGui()
 	Wall.layerA = newLayer("LayerA", 1)
 	Wall.layerB = newLayer("LayerB", 2)
 	Wall.front = Wall.layerA
+
+	-- 雾化替身：同一张图放大一点、更透一点，叠出柔光晕（Roblox GUI 没有真模糊）
+	local function newGhost(name)
+		return make("ImageLabel", {
+			Name = name,
+			Size = UDim2.new(1, 0, 1, 0),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Image = "",
+			ImageTransparency = 1,
+			ScaleType = Enum.ScaleType.Crop,
+			ZIndex = 0,
+			Parent = holder,
+		})
+	end
+	Wall.ghostA = newGhost("GhostA")
+	Wall.ghostB = newGhost("GhostB")
 
 	local aurora = make("Frame", {
 		Name = "SG_Aurora",
@@ -606,12 +626,12 @@ local function wallGui()
 		}):Play()
 	end
 
-	local vig = make("Frame", {
-		Name = "SG_Vignette",
-		Size = UDim2.new(1, 0, 0.55, 0),
-		Position = UDim2.new(0, 0, 0.45, 0),
+	-- 雾化：两条正交渐变叠出四边压暗，中间留亮
+	local vigY = make("Frame", {
+		Name = "SG_VigY",
+		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.55,
+		BackgroundTransparency = 0.45,
 		BorderSizePixel = 0,
 		ZIndex = 5,
 		Parent = holder,
@@ -619,12 +639,33 @@ local function wallGui()
 	make("UIGradient", {
 		Rotation = 90,
 		Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 1),
-			NumberSequenceKeypoint.new(1, 0.2),
+			NumberSequenceKeypoint.new(0, 0.05),
+			NumberSequenceKeypoint.new(0.5, 1),
+			NumberSequenceKeypoint.new(1, 0.05),
 		}),
-		Parent = vig,
+		Parent = vigY,
 	})
-	Wall.vig = vig
+	Wall.vigY = vigY
+
+	local vigX = make("Frame", {
+		Name = "SG_VigX",
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+		ZIndex = 5,
+		Parent = holder,
+	})
+	make("UIGradient", {
+		Rotation = 0,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.05),
+			NumberSequenceKeypoint.new(0.5, 1),
+			NumberSequenceKeypoint.new(1, 0.05),
+		}),
+		Parent = vigX,
+	})
+	Wall.vigX = vigX
 
 	Wall.scrim = make("Frame", {
 		Name = "SG_Scrim",
@@ -636,51 +677,20 @@ local function wallGui()
 		Parent = holder,
 	})
 
-	-- 顶部压边，柔化后四边都收一点，画面不会硬切到屏幕边缘
-	local vigTop = make("Frame", {
-		Name = "SG_VignetteTop",
-		Size = UDim2.new(1, 0, 0.42, 0),
-		Position = UDim2.new(0, 0, 0, 0),
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.55,
-		BorderSizePixel = 0,
-		ZIndex = 5,
-		Parent = holder,
-	})
-	make("UIGradient", {
-		Rotation = 270,
-		Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 1),
-			NumberSequenceKeypoint.new(1, 0.35),
-		}),
-		Parent = vigTop,
-	})
-	Wall.vigTop = vigTop
-
-	-- 淡入淡出蒙版：盖在壁纸之上、UI 之下
-	Wall.mask = make("Frame", {
-		Name = "SG_Mask",
-		Size = UDim2.new(1, 0, 1, 0),
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ZIndex = 8,
-		Parent = holder,
-	})
-
 	return gui
 end
 
--- 柔化后壁纸整体更淡，退到 UI 后面
+-- 柔化：浓度按雾化强度衰减，壁纸只当背景光
 local function frontAlpha()
-	local a = clamp(T.wallAlpha, 0, 1)
-	if T.wallSoft then a = a * 0.6 end
+	local base = clamp(T.wallAlpha, 0, 1)
+	local k = clamp(T.wallBlur or 0.7, 0, 1)
+	local a = base * (1 - 0.62 * k)
 	return 1 - clamp(a, 0, 1)
 end
 
 local function scrimAlpha()
 	local d = clamp(T.dim, 0, 0.95)
-	if T.wallSoft then d = clamp(d + 0.10, 0, 0.95) end
+	d = clamp(d + 0.22 * clamp(T.wallBlur or 0.7, 0, 1), 0, 0.95)
 	return d
 end
 
@@ -704,48 +714,30 @@ local function applyLook()
 		end
 	end
 	if Wall.dust then Wall.dust.Visible = T.dust end
-	if Wall.vig then Wall.vig.Visible = true end
-	if Wall.vigTop then Wall.vigTop.Visible = T.wallSoft end
+	local k = clamp(T.wallBlur or 0.7, 0, 1)
+	if Wall.vigY then
+		Wall.vigY.Visible = k > 0.02
+		Wall.vigY.BackgroundTransparency = 1 - (0.55 * k)
+	end
+	if Wall.vigX then
+		Wall.vigX.Visible = k > 0.02
+		Wall.vigX.BackgroundTransparency = 1 - (0.50 * k)
+	end
 end
 
--- 淡入：蒙版从黑到透明；淡出：从透明到黑，结束后整层隐藏
+-- 显隐：直接开关，不做淡入淡出
 function Wall.show()
 	if not (Wall.gui and Wall.gui.Parent) then wallGui() end
 	if not (Wall.gui and Wall.gui.Parent) then return end
-	Wall.fadeToken = (Wall.fadeToken or 0) + 1
 	Wall.visible = true
 	Wall.gui.Enabled = true
 	applyLook()
-	if Wall.mask then
-		if #Wall.items > 0 then
-			Wall.mask.BackgroundTransparency = 0
-			TweenService:Create(Wall.mask, TweenInfo.new(T.wallFade or 0.85, Enum.EasingStyle.Sine), {
-				BackgroundTransparency = 1,
-			}):Play()
-		else
-			Wall.mask.BackgroundTransparency = 1
-		end
-	end
 end
 
 function Wall.hide()
 	if not (Wall.gui and Wall.gui.Parent) then return end
 	Wall.visible = false
-	Wall.fadeToken = (Wall.fadeToken or 0) + 1
-	local my = Wall.fadeToken
-	local hasWall = #Wall.items > 0
-	local dur = (T.wallFade or 0.85)
-	if Wall.mask and hasWall then
-		TweenService:Create(Wall.mask, TweenInfo.new(dur, Enum.EasingStyle.Sine), {
-			BackgroundTransparency = 0,
-		}):Play()
-	end
-	schedule(function()
-		pause((hasWall and dur or 0.02) + 0.06)
-		if Wall.fadeToken ~= my then return end
-		if Wall.gui and Wall.gui.Parent then Wall.gui.Enabled = false end
-		if Wall.mask then Wall.mask.BackgroundTransparency = 1 end
-	end)
+	Wall.gui.Enabled = false
 end
 
 local function kenBurns(layer)
@@ -853,14 +845,6 @@ function Wall.play()
 		stopVideo()
 		Wall.front = nil
 		return
-	end
-
-	-- 每次重新装载都先淡入，避免整块壁纸「啪」地砸出来
-	if Wall.mask then
-		Wall.mask.BackgroundTransparency = 0
-		TweenService:Create(Wall.mask, TweenInfo.new(T.wallFade or 0.85, Enum.EasingStyle.Sine), {
-			BackgroundTransparency = 1,
-		}):Play()
 	end
 
 	schedule(function()
@@ -1018,6 +1002,7 @@ function Wall.add(url)
 		Wall.note = describe(item)
 	end
 	if P.rebuildList then pcall(P.rebuildList) end
+	pcall(Wall.saveFavorites)
 	Wall.play()
 	return true, Wall.note
 end
@@ -1026,6 +1011,7 @@ function Wall.remove(idx)
 	table.remove(Wall.items, idx)
 	if Wall.idx > #Wall.items then Wall.idx = 1 end
 	if P.rebuildList then pcall(P.rebuildList) end
+	pcall(Wall.saveFavorites)
 	Wall.play()
 end
 
@@ -1037,10 +1023,109 @@ function Wall.clear()
 	Wall.play()
 end
 
+--──────────────── 收藏夹：链接单独存一份，清空列表也不会丢 ────────────────
+local FAV_FILE = "SG_Wallpapers.json"
+Wall.favCount = 0
+
+function Wall.favorites()
+	local list = {}
+	for _, it in ipairs(Wall.items) do
+		if type(it.url) == "string" and it.url ~= "" then table.insert(list, it.url) end
+	end
+	return list
+end
+
+function Wall.saveFavorites()
+	if type(writefile) ~= "function" then return false, "执行器不支持写文件" end
+	local list = Wall.favorites()
+	local payload = { saved = list, count = #list, at = tostring(os and os.time and os.time() or 0) }
+	local ok, json = pcall(function() return game:GetService("HttpService"):JSONEncode(payload) end)
+	if not ok then return false, "序列化失败" end
+	local ok2 = pcall(function() writefile(FAV_FILE, json) end)
+	if not ok2 then return false, "写入 " .. FAV_FILE .. " 失败" end
+	Wall.favCount = #list
+	return true, string.format("已收藏 %d 条（%s）", #list, FAV_FILE)
+end
+
+function Wall.readFavorites()
+	if type(readfile) ~= "function" then return {} end
+	local ok, raw = pcall(function() return readfile(FAV_FILE) end)
+	if not ok or type(raw) ~= "string" or #raw < 8 then return {} end
+	local ok2, d = pcall(function() return game:GetService("HttpService"):JSONDecode(raw) end)
+	if not ok2 or type(d) ~= "table" or type(d.saved) ~= "table" then return {} end
+	local list = {}
+	for _, u in ipairs(d.saved) do
+		if type(u) == "string" and u ~= "" then table.insert(list, u) end
+	end
+	Wall.favCount = #list
+	return list
+end
+
+function Wall.loadFavorites()
+	local list = Wall.readFavorites()
+	if #list == 0 then return false, "收藏夹是空的（先点「存为收藏」）" end
+	local have = {}
+	for _, it in ipairs(Wall.items) do
+		if it.url then have[it.url] = true end
+	end
+	local added = 0
+	for _, u in ipairs(list) do
+		if not have[u] then
+			have[u] = true
+			table.insert(Wall.items, { url = u, id = u, kind = "image" })
+			added = added + 1
+		end
+	end
+	if P.rebuildList then pcall(P.rebuildList) end
+	schedule(function()
+		for i, it in ipairs(Wall.items) do
+			if it.id == it.url then
+				local asset = isVideoUrl(it.url) and resolveVideo(it.url) or resolveImage(it.url)
+				if asset and asset.id then
+					Wall.items[i] = {
+						url = it.url, id = asset.id, kind = asset.kind or "image",
+						w = asset.w, h = asset.h, path = asset.path,
+					}
+				end
+			end
+		end
+		if P.rebuildList then pcall(P.rebuildList) end
+		Wall.play()
+	end)
+	return true, string.format("收藏 %d 条，新增 %d 条", #list, added)
+end
+
 function Wall.refresh()
 	wallGui()
 	applyLook()
 end
+
+-- 雾化替身：跟着当前壁纸走，放大一点、更透一点，形成柔光晕
+schedule(function()
+	while true do
+		pause(0.1)
+		local f = Wall.front
+		local k = clamp(T.wallBlur or 0.7, 0, 1)
+		if f and Wall.ghostA and k > 0.02 and f.Image ~= "" then
+			local list = { { Wall.ghostA, 1.08, 0.22 }, { Wall.ghostB, 1.18, 0.32 } }
+			for i = 1, 2 do
+				local g = list[i][1]
+				local sc = list[i][2]
+				g.Image = f.Image
+				g.ImageRectSize = f.ImageRectSize
+				g.ImageRectOffset = f.ImageRectOffset
+				g.AnchorPoint = f.AnchorPoint
+				g.Size = UDim2.new(f.Size.X.Scale * sc, f.Size.X.Offset * sc, f.Size.Y.Scale * sc, f.Size.Y.Offset * sc)
+				g.Position = f.Position
+				g.ImageTransparency = clamp(f.ImageTransparency + list[i][3] * (1.2 - k), 0, 1)
+				g.Visible = true
+			end
+		elseif Wall.ghostA then
+			Wall.ghostA.Visible = false
+			Wall.ghostB.Visible = false
+		end
+	end
+end)
 
 --=====================================================================
 --  6 · 光影（内置 MC 系风格 / JSON 光影包 / 图片滤色）
@@ -1815,7 +1900,10 @@ local function applyText(o)
 	o.TextStrokeTransparency = 1
 	local baseSize = Reg.origTS[o]
 	if baseSize and baseSize > 0 and not o.TextScaled then
-		o.TextSize = math.max(7, math.floor(baseSize * (T.textScale or 1) + 0.5))
+		local s = baseSize * (T.textScale or 1)
+		-- 原界面里的大标题压小一档，正文保持
+		if s > 20 then s = 20 + (s - 20) * 0.72 end
+		o.TextSize = math.max(7, math.floor(s + 0.5))
 	end
 	o.Font = ((o.TextSize or 14) >= 18) and FONT_BOLD or FONT_BODY
 end
@@ -2490,7 +2578,7 @@ end
 local function collectPanelFonts(root)
 	for _, d in ipairs(root:GetDescendants()) do
 		if (d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox")) and not panelFontBase[d] then
-			panelFontBase[d] = math.max(7, math.floor(d.TextSize * 0.88 + 0.5))
+			panelFontBase[d] = math.max(7, d.TextSize)
 		end
 	end
 	applyPanelFonts()
@@ -2547,7 +2635,7 @@ local function buildPanel()
 		Position = UDim2.new(0, 26, 0, 12),
 		BackgroundTransparency = 1,
 		Font = FONT_BOLD,
-		TextSize = 11,
+		TextSize = 9,
 		TextColor3 = T.text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = header,
@@ -2879,13 +2967,24 @@ local function buildPanel()
 		applyLook()
 	end)
 	bw.switch("仅菜单显示时出现（关闭即淡出）", function() return T.followWindow end, function(v) T.followWindow = v end)
-	bw.switch("柔化到背景", function() return T.wallSoft end, function(v)
-		T.wallSoft = v
+	bw.slider("背景雾化（0 = 关）", 0, 1, 0.01, function() return T.wallBlur end, function(v)
+		T.wallBlur = v
 		applyLook()
 	end)
-	bw.slider("淡入淡出", 0.2, 2, 0.01, function() return T.wallFade end, function(v)
-		T.wallFade = v
-	end)
+	bw.buttons({
+		{ text = "存为收藏", accent = true, cb = function()
+			local ok, msg = Wall.saveFavorites()
+			noteLabel.Text = msg
+			toast(msg)
+		end },
+		{ text = "载入收藏", cb = function()
+			local ok, msg = Wall.loadFavorites()
+			noteLabel.Text = msg
+			toast(msg)
+			if ok and P.save then pcall(P.save) end
+		end },
+	})
+	bw.note("收藏存在 SG_Wallpapers.json：清空列表、换号、重开都还在，点「载入收藏」就回来。", 24)
 	bw.buttons({
 		{ text = "重新播放", cb = function() Wall.play() end },
 		{ text = "清空", cb = function()
@@ -3341,7 +3440,7 @@ local function saveState()
 		seamless = T.seamless, chrome = T.chrome, translate = T.translate, grip = T.grip,
 		uiFont = T.uiFont, textScale = T.textScale,
 		mode = T.mode, hold = T.hold, speed = T.speed, dim = T.dim, wall = T.wallAlpha,
-		wallSoft = T.wallSoft, wallFade = T.wallFade,
+		wallBlur = T.wallBlur,
 		aurora = T.aurora, dust = T.dust, blur = T.blur, followWindow = T.followWindow,
 		shade = Shade.profileKey, shadePower = T.shadePower,
 		music = Music.url, musicVolume = Music.volume, musicLoop = Music.loop,
@@ -3386,8 +3485,7 @@ local function loadState()
 	T.followWindow = bool(d.followWindow, T.followWindow)
 	T.uiFont = num(d.uiFont, T.uiFont)
 	T.textScale = num(d.textScale, T.textScale)
-	T.wallSoft = bool(d.wallSoft, T.wallSoft)
-	T.wallFade = num(d.wallFade, T.wallFade)
+	T.wallBlur = num(d.wallBlur, T.wallBlur)
 	T.shadePower = num(d.shadePower, T.shadePower)
 	if type(d.shade) == "string" and SHADES[d.shade] then Shade.profileKey = d.shade end
 	Music.volume = num(d.musicVolume, Music.volume)
@@ -3414,6 +3512,20 @@ local function boot()
 	for _, it in ipairs(CONFIG.backdrop.items or {}) do
 		if type(it) == "string" and it ~= "" then
 			table.insert(Wall.items, { url = it, id = it, kind = "image" })
+		end
+	end
+
+	-- 没配置就直接吃收藏夹，免得每次重进都要重新贴链接
+	if #Wall.items == 0 then
+		local favs = Wall.readFavorites()
+		if #favs > 0 then
+			for _, u in ipairs(favs) do
+				table.insert(Wall.items, { url = u, id = u, kind = "image" })
+			end
+			schedule(function()
+				pause(0.6)
+				toast(string.format("已自动载入收藏 %d 条壁纸", #favs))
+			end)
 		end
 	end
 
@@ -3486,7 +3598,7 @@ if getgenv and getgenv().SEAMLESS_DHC and getgenv().SEAMLESS_DHC.destroy then
 	pcall(getgenv().SEAMLESS_DHC.destroy)
 end
 
-print("[SG] Doors HardCore · 无痕玻璃 v6 启动（源：pastefy Bf6hbDY4）")
+print("[SG] Doors HardCore · 无痕玻璃 v7 启动（源：pastefy Bf6hbDY4）")
 
 local okBoot, errBoot = pcall(boot)
 if not okBoot then warn("[SG] 启动失败: " .. tostring(errBoot)) end
