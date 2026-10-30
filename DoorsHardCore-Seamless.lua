@@ -1,17 +1,21 @@
 --=====================================================================
---  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v3)
---  运行时换肤 + 壁纸引擎 + 光影风格包 + 中文翻译
+--  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v4)
+--  运行时换肤 + 壁纸引擎 + 光影风格包 + 中文翻译 + 开场 BGM
 -----------------------------------------------------------------------
 --  原脚本（一行未改）：
 --    https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Doors-HardCore.lua
 --
+--  v4 相对 v3：
+--    · 修：拖动只认标题栏，拖滑块 / 列表 / 输入框不再带着整块面板跑
+--    · 视频加载失败自动降级成图片，并用资产类型探测说明原因
+--    · 新增「音乐」页：开场 BGM，点任意模式后循环，传送或超时自动淡出
+--
 --  v3 相对 v2：
---    · 删掉「材质覆写」，只保留光影（不碰场景部件，零副作用）
---    · 光影改成和壁纸一样的「识别链接」：内置 MC 系风格 / JSON 光影包 / 图片滤色
---    · 文案换成正常流畅的中文翻译（不再是文言）
---    · 壁纸支持视频：Roblox 视频资产 / 视频页链接 → 自动识别并循环播放
---    · 壁纸自动识别序列帧长图（一张横条 = 一段动画）
---    · 控制面板瘦身 + 整块可拖动；被换肤的窗口也挂一个拖动把手
+--    · 删掉「材质覆写」，只保留光影
+--    · 光影改成「识别链接」：内置 MC 系风格 / JSON 光影包 / 图片滤色
+--    · 文案换成正常中文翻译
+--    · 壁纸支持视频资产循环，长图自动识别成序列帧
+--    · 面板瘦身 + 窗口拖动把手
 --
 --  用法：整段粘进执行器回车；或 loadstring 远程载入
 --  面板：F2 开合
@@ -60,6 +64,8 @@ local Players          = game:GetService("Players")
 local Lighting         = game:GetService("Lighting")
 local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local SoundService     = game:GetService("SoundService")
 local LocalPlayer      = Players.LocalPlayer
 
 local function schedule(fn, ...)
@@ -139,6 +145,24 @@ local function robloxId(s)
 end
 
 local VIDEO_EXT = { mp4 = true, webm = true, mov = true, m4v = true, avi = true, mkv = true }
+
+-- 资产类型探测：贴进来的 id 到底是图片、音频还是视频
+local ASSET_KIND = {
+	[1] = "图片", [2] = "T恤", [3] = "音频", [4] = "网格", [5] = "脚本", [8] = "帽子",
+	[10] = "模型", [13] = "贴图", [24] = "动画", [62] = "视频",
+}
+
+local function probeAsset(id)
+	local num = tonumber(tostring(id or ""))
+	if not num then return nil end
+	local ok, info = pcall(function()
+		return MarketplaceService:GetProductInfo(num, Enum.InfoType.Asset)
+	end)
+	if ok and info then
+		return info.AssetTypeId, ASSET_KIND[info.AssetTypeId] or ("类型" .. tostring(info.AssetTypeId)), info.Name
+	end
+	return nil
+end
 
 local function isVideoUrl(s)
 	s = tostring(s or "")
@@ -603,8 +627,13 @@ local function playVideo(item, gen)
 	end)
 
 	if not ok or not vf then
-		Wall.note = "视频播放器创建失败，已退回图片模式"
+		item.kind = "image"
+		Wall.note = "这个执行器不支持视频组件，已按图片处理"
 		toast(Wall.note)
+		schedule(function()
+			pause(0.1)
+			Wall.play()
+		end)
 		return false
 	end
 	Wall.video = vf
@@ -631,8 +660,14 @@ local function playVideo(item, gen)
 				local loaded = false
 				pcall(function() loaded = vf.IsLoaded end)
 				if not loaded then
-					Wall.note = "视频没加载出来：需要 Roblox 视频资产（直链要先上传成视频）"
-					toast(Wall.note)
+					item.kind = "image"
+					Wall.note = "这个 id 播不了视频，已退回图片模式"
+					toast(Wall.note .. "（视频必须是平台「视频」资产，不是图片/音频 id）")
+					schedule(function()
+						pause(0.2)
+						Wall.play()
+					end)
+					return
 				end
 			end
 		end
@@ -767,8 +802,21 @@ function Wall.add(url)
 	if url == "" then return false, "地址是空的" end
 
 	local asset, err
+	local forcedImage = false
+	local kindName = nil
+
 	if isVideoUrl(url) then
-		asset, err = resolveVideo(url)
+		local vid = robloxId(url)
+		if vid then
+			local t, tname = probeAsset(vid)
+			kindName = tname
+			if t == 1 or t == 13 then forcedImage = true end
+		end
+		if forcedImage then
+			asset, err = resolveImage(url)
+		else
+			asset, err = resolveVideo(url)
+		end
 	else
 		asset, err = resolveImage(url)
 	end
@@ -795,7 +843,11 @@ function Wall.add(url)
 
 	table.insert(Wall.items, item)
 	Wall.idx = math.max(1, #Wall.items - 1)
-	Wall.note = describe(item)
+	if forcedImage then
+		Wall.note = string.format("这个 id 是「%s」，已按图片识别", tostring(kindName or "图片"))
+	else
+		Wall.note = describe(item)
+	end
 	if P.rebuildList then pcall(P.rebuildList) end
 	Wall.play()
 	return true, Wall.note
@@ -1264,7 +1316,137 @@ function Shade.recognize(text)
 end
 
 --=====================================================================
---  7 · 中文翻译（正常语序）
+--  7 · 音乐（开场 BGM：点任意模式后循环，进第 0 门前自动收）
+--=====================================================================
+local Music = {
+	url = "", id = nil,
+	volume = 0.55, loop = true, autoOnMode = true, stopOnTeleport = true, maxSeconds = 45,
+	sound = nil, playing = false, startedAt = 0, autoUsed = false,
+	originPos = nil, note = "未设置音乐",
+}
+
+local function musicResolve(url)
+	url = trim(url)
+	if url == "" then return nil, "地址是空的" end
+	if url:match("^rbxassetid://%d+") then return url, url:match("(%d+)") end
+	if url:match("^rbxasset://") then return url, nil end
+	local id = robloxId(url)
+	if id then return "rbxassetid://" .. id, id end
+	if url:match("^%d+$") then return "rbxassetid://" .. url, url end
+	return nil, "音乐要用 Roblox 音频 id（rbxassetid://数字）；mp3 直链播不了"
+end
+
+function Music.load(url)
+	local id, rid = musicResolve(url)
+	if not id then return false, rid end
+	if Music.sound then pcall(function() Music.sound:Destroy() end) end
+	Music.sound = nil
+	local ok, made = pcall(function()
+		local s = Instance.new("Sound")
+		s.Name = "SG_BGM"
+		s.SoundId = id
+		s.Looped = Music.loop
+		s.Volume = Music.volume
+		s.Parent = SoundService
+		return s
+	end)
+	if not ok or not made then return false, "音频实例创建失败" end
+	Music.sound = made
+	Music.url = url
+	Music.id = id
+	Music.autoUsed = false
+	if rid then
+		local t, tname = probeAsset(rid)
+		if t and t ~= 3 then
+			Music.note = string.format("已载入 id %s，但它看起来是「%s」，不是音频", tostring(rid), tostring(tname))
+		else
+			Music.note = "已载入音频 id " .. tostring(rid)
+		end
+	else
+		Music.note = "已载入：" .. tostring(id)
+	end
+	return true, Music.note
+end
+
+function Music.play()
+	if not Music.sound then return false, "还没有载入音乐" end
+	Music.autoUsed = true
+	pcall(function()
+		Music.sound.Looped = Music.loop
+		Music.sound.Volume = Music.volume
+		Music.sound.TimePosition = 0
+		Music.sound:Play()
+	end)
+	Music.playing = true
+	Music.startedAt = tick()
+	Music.originPos = nil
+	local char = LocalPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if hrp then Music.originPos = hrp.Position end
+	return true
+end
+
+function Music.stop(fade)
+	Music.playing = false
+	local s = Music.sound
+	if not s then return end
+	if not fade then
+		pcall(function() s:Stop() end)
+		return
+	end
+	local base = Music.volume
+	schedule(function()
+		for i = 1, 10 do
+			if not s.Parent then return end
+			pcall(function() s.Volume = base * (1 - i / 10) end)
+			pause(0.04)
+		end
+		pcall(function()
+			s:Stop()
+			s.Volume = base
+		end)
+	end)
+end
+
+function Music.trigger()
+	if not Music.id then return end
+	if Music.autoUsed then return end
+	Music.autoUsed = true
+	schedule(function()
+		pause(0.4)
+		Music.play()
+	end)
+end
+
+local function musicHookButton(btn)
+	pcall(function()
+		btn.MouseButton1Click:Connect(function()
+			if Music.autoOnMode then Music.trigger() end
+		end)
+	end)
+end
+
+-- 停止条件：超时 / 传送（≈进第 0 门）/ 手动
+schedule(function()
+	while true do
+		pause(0.5)
+		if Music.playing then
+			local elapsed = tick() - Music.startedAt
+			if Music.maxSeconds > 0 and elapsed > Music.maxSeconds then
+				Music.stop(true)
+			elseif Music.stopOnTeleport then
+				local char = LocalPlayer.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				if hrp and Music.originPos and (hrp.Position - Music.originPos).Magnitude > 60 then
+					Music.stop(true)
+				end
+			end
+		end
+	end
+end)
+
+--=====================================================================
+--  7.1 · 中文翻译（正常语序）
 --=====================================================================
 local TRANSLATE = {
 	["enable"] = "启用", ["enabled"] = "已启用", ["disable"] = "禁用", ["disabled"] = "已禁用",
@@ -1580,6 +1762,10 @@ local function attachGrip(win)
 		grip.Visible = T.grip
 		return grip
 	end
+	-- 满屏根容器不挂把手，否则一拖就把整块界面带走
+	local vp = viewport()
+	local ws = win.AbsoluteSize
+	if ws.X > vp.X * 0.92 and ws.Y > vp.Y * 0.92 then return nil end
 	grip = Instance.new("TextButton")
 	grip.Name = "SG_Grip"
 	grip.Text = "⋮⋮"
@@ -1668,6 +1854,7 @@ local function dress(g)
 			local kind = (sat(Reg.origBG[g] or Color3.new(0, 0, 0)) > 0.22) and "chip" or "control"
 			Reg.style[g] = kind
 			applyStyle(g, kind)
+			musicHookButton(g)
 		elseif cls == "TextBox" then
 			Reg.style[g] = "control"
 			applyStyle(g, "control")
@@ -1765,12 +1952,13 @@ local function ensureBlur()
 end
 
 --=====================================================================
---  9 · 控制面板（分页 + 整块可拖动 + 瘦身）
+--  9 · 控制面板（五页签 + 标题栏拖动 + 瘦身）
 --=====================================================================
 local TAB_LIST = {
 	{ key = "look", name = "外观" },
 	{ key = "wall", name = "壁纸" },
 	{ key = "shade", name = "光影" },
+	{ key = "music", name = "音乐" },
 	{ key = "text", name = "翻译" },
 }
 
@@ -2143,7 +2331,7 @@ local function buildPanel()
 		Parent = header,
 	})
 	local hint = make("TextLabel", {
-		Text = "按住面板任意处可拖动 · F2 隐藏",
+		Text = "按住上方这一条拖动 · F2 隐藏",
 		Size = UDim2.new(1, -110, 0, 10),
 		Position = UDim2.new(0, 26, 0, 25),
 		BackgroundTransparency = 1,
@@ -2151,6 +2339,18 @@ local function buildPanel()
 		TextSize = 8,
 		TextColor3 = T.dimc,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = header,
+	})
+
+	make("TextLabel", {
+		Text = "⋮⋮",
+		Size = UDim2.new(0, 16, 0, 22),
+		Position = UDim2.new(1, -72, 0, 8),
+		BackgroundTransparency = 1,
+		Font = FONT_BODY,
+		TextSize = 10,
+		TextColor3 = T.dimc,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = header,
 	})
 
@@ -2540,6 +2740,48 @@ local function buildPanel()
 	})
 	bt.finish()
 
+	--──────── 音乐 ────────
+	local bm = newBuilder(pageScroll("music"))
+	local _, mNote = bm.note("未设置音乐", 24)
+	bm.input("音频 id / rbxassetid://…", "载入", function(box)
+		local ok, msg = Music.load(box.Text)
+		mNote.Text = msg
+		toast(msg)
+		if ok then
+			box.Text = ""
+			if P.save then pcall(P.save) end
+		end
+	end)
+	bm.slider("音量", 0, 1, 0.01, function() return Music.volume end, function(v)
+		Music.volume = v
+		if Music.sound then pcall(function() Music.sound.Volume = v end) end
+	end)
+	bm.slider("最长播放（0 = 不限）", 0, 60, 1, function() return Music.maxSeconds end, function(v)
+		Music.maxSeconds = v
+	end)
+	bm.switch("循环播放", function() return Music.loop end, function(v)
+		Music.loop = v
+		if Music.sound then pcall(function() Music.sound.Looped = v end) end
+	end)
+	bm.switch("点任意模式后播放", function() return Music.autoOnMode end, function(v)
+		Music.autoOnMode = v
+	end)
+	bm.switch("传送后自动停（≈进第 0 门）", function() return Music.stopOnTeleport end, function(v)
+		Music.stopOnTeleport = v
+	end)
+	bm.buttons({
+		{ text = "试听", accent = true, cb = function()
+			local ok, err = Music.play()
+			toast(ok and "开始播放" or tostring(err))
+		end },
+		{ text = "停止", cb = function()
+			Music.stop(true)
+			toast("已停止")
+		end },
+	})
+	bm.note("Roblox 只能用平台内的音频资产：50 秒内的曲子传到 Creator → Audio，用审核通过的音频 id 贴进来；mp3 直链播不了。", 46)
+	bm.finish()
+
 	selectTab(T.tab or "look")
 
 	local collapsed = false
@@ -2556,10 +2798,9 @@ local function buildPanel()
 		gui.Enabled = false
 	end)
 
-	-- 拖动：整块可拖，滑块/按钮/输入框按自己的逻辑走
+	-- 拖动只认标题栏这一条，避免拖滑块/列表时整块面板跟着跑
 	local dragging, startPos, startMouse = false, nil, nil
-	card.InputBegan:Connect(function(input)
-		if P.sliderBusy then return end
+	header.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
@@ -2818,6 +3059,8 @@ local function saveState()
 		mode = T.mode, hold = T.hold, speed = T.speed, dim = T.dim, wall = T.wallAlpha,
 		aurora = T.aurora, dust = T.dust, blur = T.blur, followWindow = T.followWindow,
 		shade = Shade.profileKey, shadePower = T.shadePower,
+		music = Music.url, musicVolume = Music.volume, musicLoop = Music.loop,
+		musicAuto = Music.autoOnMode, musicStopTp = Music.stopOnTeleport, musicMax = Music.maxSeconds,
 		items = items,
 	}
 	local ok, json = pcall(function() return game:GetService("HttpService"):JSONEncode(payload) end)
@@ -2858,6 +3101,12 @@ local function loadState()
 	T.followWindow = bool(d.followWindow, T.followWindow)
 	T.shadePower = num(d.shadePower, T.shadePower)
 	if type(d.shade) == "string" and SHADES[d.shade] then Shade.profileKey = d.shade end
+	Music.volume = num(d.musicVolume, Music.volume)
+	Music.loop = bool(d.musicLoop, Music.loop)
+	Music.autoOnMode = bool(d.musicAuto, Music.autoOnMode)
+	Music.stopOnTeleport = bool(d.musicStopTp, Music.stopOnTeleport)
+	Music.maxSeconds = num(d.musicMax, Music.maxSeconds)
+	if type(d.music) == "string" and d.music ~= "" then Music.pendingUrl = d.music end
 	if type(d.items) == "table" then
 		for _, u in ipairs(d.items) do
 			if type(u) == "string" and u ~= "" then
@@ -2887,6 +3136,10 @@ local function boot()
 	ensureBlur()
 	buildPanel()
 	bindKey()
+
+	if Music.pendingUrl then
+		pcall(Music.load, Music.pendingUrl)
+	end
 
 	if #Wall.items > 0 then
 		schedule(function()
@@ -2943,7 +3196,7 @@ if getgenv and getgenv().SEAMLESS_DHC and getgenv().SEAMLESS_DHC.destroy then
 	pcall(getgenv().SEAMLESS_DHC.destroy)
 end
 
-print("[SG] Doors HardCore · 无痕玻璃 v3 启动")
+print("[SG] Doors HardCore · 无痕玻璃 v4 启动")
 
 local okBoot, errBoot = pcall(boot)
 if not okBoot then warn("[SG] 启动失败: " .. tostring(errBoot)) end
