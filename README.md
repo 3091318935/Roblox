@@ -1,4 +1,4 @@
-# Doors HardCore · 无痕玻璃 Seamless Glass（v4）
+# Doors HardCore · 无痕玻璃 Seamless Glass（v5）
 
 把 `Zero0Star/RipperNewSound` 里 **Doors-HardCore.lua** 的界面，换成「无缝透明边框 + 壁纸 + 光影 + 中文 + 开场 BGM」的样子。
 
@@ -10,15 +10,14 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/mai
 
 ---
 
-## v4 改了什么
+## v5 修了什么
 
-| 问题 / 需求 | 处理 |
+| 问题 | 原因 / 处理 |
 | --- | --- |
-| **拖一个栏目，整块面板跟着动** | 拖动只认标题栏那一条（`⋮⋮` 区域），滑块 / 列表 / 输入框再也不会带着面板跑 |
-| **导入视频报「视频没加载出来」** | 加资产类型探测：贴进来的是图片就按图片显示，是音频就提示去音乐页；视频失败自动降级成图片，并写清原因 |
-| **想要开场 BGM** | 新增「音乐」页：载入音频 id → 点任意模式后开始循环 → 传送（≈进第 0 门）或超时自动淡出 |
-
-v3 起已具备：删掉材质覆写、光影「识别链接」、正常中文翻译、壁纸视频循环、长图自动切序列帧、窗口拖动把手。
+| **拖一根滑块，整排滑块一起动** | 之前所有滑块共用一个全局 `sliderBusy` 标志，任意一根在拖时，其余滑块的 `InputChanged` 也会执行 `commit`。现在每根滑块各自持有 `active`，互不影响 |
+| **面板拖动被删掉了** | 恢复：整块面板可拖（标题栏 + 空白处），但改成**矩形命中测试** —— 指针落在滑块 / 按钮 / 输入框 / 列表上就不拖，不再依赖事件顺序 |
+| **上传页在哪** | 壁纸页、音乐页各加两个按钮：「上传页」「教程」，能开浏览器就直接开，不能就复制链接到剪贴板 |
+| **第三方 mp3 / mp4 想直接用** | 本地工具 `tools/video2strip.py`（mp4/gif → 序列帧长图）与 `tools/audio_check.py`（体检 / 裁到 50 秒）；生成的图还能直接被面板当本地文件读 |
 
 ---
 
@@ -26,10 +25,12 @@ v3 起已具备：删掉材质覆写、光影「识别链接」、正常中文�
 
 | 文件 | 说明 |
 | --- | --- |
-| `DoorsHardCore-Seamless.lua` | v4 引擎主体，单文件、无依赖 |
+| `DoorsHardCore-Seamless.lua` | v5 引擎主体，单文件、无依赖 |
 | `DoorsHardCore-LiquidGlass.lua` | v1 液态玻璃版，备份 |
 | `loader.lua` | 一行启动器 |
-| `LICENSE` | MIT |
+| `tools/video2strip.py` | 本地 mp4 / gif → 序列帧长图（免上传用动画壁纸） |
+| `tools/audio_check.py` | 本地 mp3 体检 / 裁到 50 秒 |
+| `tools/README.md` | 上面两个脚本的用法、ffmpeg 安装 |
 | `github/` | 发布工具：`push.ps1` / `push.sh` / `PUBLISH.md` |
 
 ---
@@ -38,7 +39,7 @@ v3 起已具备：删掉材质覆写、光影「识别链接」、正常中文�
 
 1. 整段粘进执行器回车；或 `loadstring` 远程载入。
 2. 右下角出现「无痕 · 外观」面板，`F2` 开合。
-3. **拖动只按标题栏**（左边有 `⋮⋮`，标题下面写着提示）；`–` 折叠、`×` 隐藏。
+3. **拖面板**：按标题栏或任意空白处；按在滑块/按钮/输入框/列表上时不会带动面板。
 
 ---
 
@@ -46,72 +47,57 @@ v3 起已具备：删掉材质覆写、光影「识别链接」、正常中文�
 
 ### 外观
 
-模糊 / 压暗 / 玻璃 / 描边 / 圆角 / 缩放；三个开关：无缝边框、顶部高光、窗口拖动把手；6 个色板 + 色调滑杆。
-
-- 描边拉到 0 = 完全无缝，描边与分割线一起消失。
-- 缩放给人家的窗口挂 `UIScale`，不动原始 `Size/Position`。
+模糊 / 压暗 / 玻璃 / 描边 / 圆角 / 缩放；开关：无缝边框、顶部高光、窗口拖动把手；6 色板 + 色调滑杆。
 
 ### 壁纸
 
-贴链接 → 自动识别类型 → 进列表（`×` 删除，存进 `SG_Config.json`）。
+贴链接 → 自动识别 → 进列表（`×` 删除，存 `SG_Config.json`）。
 
 | 贴的东西 | 识别为 | 播放 |
 | --- | --- | --- |
 | `rbxassetid://数字` / 纯数字 | 图片 | 缓慢放大 / 轮播 / 静帧 |
 | `.png .jpg .webp` 直链 | 图片（缓存到 `SG_Assets/`） | 同上 |
 | 长条拼图（宽÷高 = 整数且 ≥3） | 序列帧 | 自动切帧循环 |
-| 视频 id / `roblox.com/videos/…` | 视频 | `VideoFrame` 循环 + 续播 + 看门狗 |
+| 本地文件名，如 `clip_strip.png` | 本地图片（走 `getcustomasset`） | 同上 |
+| 视频 id / `roblox.com/videos/…` | 视频 | `VideoFrame` 循环 + 续播 |
 
-**视频为什么容易失败（对应你看到的那条提示）**
+页底两个按钮：**视频上传页** / **上传教程**（`openbrowser` → `openurl` → 复制链接，逐级降级）。
 
-Roblox 只认平台内的「**视频**」资产，不认 mp4 文件、也不认图片/音频 id。做法：
-
-1. https://create.roblox.com → **Development Items → Videos** 上传 mp4（有大小 / 时长限制，需要审核）
-2. 审核通过后拿 id（纯数字）
-3. 面板里贴 `1234567890` 或 `rbxassetid://1234567890` 或视频页链接
-
-v4 现在会自动判断：id 是**图片**就直接当图片显示、是**音频**就提示你去音乐页；真播不出来会退回图片模式，而不是卡一条错误提示。
+**视频的现实**：Roblox 只认平台「视频」资产。做法是 Creator Dashboard → Development Items → Videos 传 mp4（有大小/时长限制、要审核）→ 拿 id 贴进来。贴错类型（图片/音频 id）脚本会用 `GetProductInfo` 探测出来并按正确类型处理。
 
 ### 光影
 
-| 输入 | 识别结果 |
-| --- | --- |
-| `bsl` / `complementary` / `seus` / `sildur` / `kuda` / `vanilla` / `night` / `cinema` / `moon` / `neon` / `gloom`，或中文「冷月/霓虹/夜色/幽影/电影」 | 内置风格 |
-| `https://….json` | 光影包，按字段加载 |
-| 任意图片 | 全屏滤色片 |
+`bsl` / `complementary` / `seus` / `sildur` / `kuda` / `vanilla` / `night` / `cinema` / `moon` / `neon` / `gloom`（也认中文「冷月/霓虹/夜色/幽影/电影」）→ 内置风格；`.json` 链接 → 光影包；图片链接 → 滤色片。带 0~1.6 强度与「还原光影」。
 
-内置是 **MC 光影观感 → Roblox 后处理** 的映射（色调映射 / 泛光 / 景深 / 太阳光 / 雾气 / 曝光），带 0~1.6 强度滑杆和「还原光影」。
+### 音乐
 
-自建光影包：
+音频 id、音量、最长播放（默认 45s）、循环、点任意模式后播放、传送后自动停、试听/停止；页底 **音频上传页** / **音频文档** 按钮。
 
-```json
-{ "name":"My Pack",
-  "lighting": { "Brightness":1.25, "Ambient":[84,96,112], "ColorShift_Top":"#fff0d6" },
-  "cc": { "TintColor":[255,244,226], "Contrast":0.16, "Saturation":0.18 },
-  "bloom": { "Intensity":0.7, "Size":26, "Threshold":1.05 },
-  "sun": { "Intensity":0.12, "Spread":0.9 },
-  "atmosphere": { "Density":0.32, "Haze":1.6 } }
-```
-
-### 音乐（v4 新增）
-
-| 控件 | 作用 |
-| --- | --- |
-| 音频 id 输入 | `rbxassetid://数字` 或纯数字；mp3 直链播不了 |
-| 音量 | 0~1，实时生效 |
-| 最长播放 | 0 = 不限；默认 45 秒（贴合 50 秒内的曲子） |
-| 循环播放 | `Looped` |
-| 点任意模式后播放 | 你在注入菜单里点第一个按钮后开始播（默认开） |
-| 传送后自动停 | 角色位置突变 > 60 格就淡出，≈进第 0 门那一刻（默认开） |
-| 试听 / 停止 | 手动控制 |
-
-停止条件三选一先到先停：**超时** / **传送** / **手动**。这样 BGM 只盖住「选模式 → 进入第 0 门」这段，不会一路跟着跑。
-
-> 音频要走 Roblox 音频资产：https://create.roblox.com → **Audio** 上传（50 秒内的曲子正好合适），拿审核通过的 id。别人上传的音频如果设了私有，你也用不了。
+停止条件先到先停：超时 / 传送（≈进第 0 门）/ 手动。
 
 ### 翻译
 
-开关 + 自定义词条（`原文=中文, Settings=设置`）。词表覆盖常见界面词，且不会覆盖原脚本后续改动的数值 / 键位 / 状态文字。
+中文替换开关 + 自定义词条（`原文=中文, Settings=设置`），不会覆盖原脚本后续改动的数值/键位/状态。
+
+---
+
+## 第三方 mp3 / mp4 怎么变成 Roblox 能用的
+
+```powershell
+# 一次性依赖
+winget install Gyan.FFmpeg
+python -c "import PIL; print(PIL.__version__)"
+
+# 视频 → 序列帧长图（不上传也能当动画壁纸）
+python tools\video2strip.py clip.mp4 --frames 12 --height 240
+# → clip_strip.png，丢进执行器 workspace，壁纸页贴 clip_strip.png
+
+# 音频体检 / 裁到 50 秒内
+python tools\audio_check.py song.mp3 --trim 45
+# → song_trim.mp3，去 Creator → Audio 上传，拿 id 贴音乐页
+```
+
+为什么不直接「一键上传」：上传走的是 Creator Dashboard 的网页登录态接口（需要你的 Roblox cookie + CSRF），执行器跑在客户端里，没有也不该拿这些凭证。所以自动化只做到文件侧——转换、体检、裁剪、生成可直接用的图或 id，点「上传」那一下走官方页面。
 
 ---
 
@@ -123,7 +109,6 @@ local CONFIG = {
     runOriginal = true,
     waitTimeout = 30, watchSeconds = 120,
     panelKey    = Enum.KeyCode.F2,
-
     theme = { accent = Color3.fromRGB(0,200,0), glass = 0.74, border = 0.30,
               corner = 14, scale = 1, seamless = true, chrome = true,
               translate = true, grip = true },
@@ -133,19 +118,19 @@ local CONFIG = {
 }
 ```
 
-面板改动存在 `SG_Config.json`（含音乐 id、音量、开关），壁纸缓存在 `SG_Assets/`。
+面板改动存 `SG_Config.json`（含音乐 id / 音量 / 开关），壁纸缓存 `SG_Assets/`。
 
 ---
 
 ## 常见问题
 
-**拖一下面板就整块动？** v4 已修：只有标题栏能拖。如果还在旧版，重新拉一次脚本。
+**滑块还是一起动？** 确认拉的是 v5（控制台会打印 `无痕玻璃 v5 启动`），旧版缓存脚本要重新 `HttpGet` 一次。
 
-**视频还是不出画面？** 先看面板「壁纸」页那行识别结果：写着「已识别：图片」= 你贴的是图片 id；写着「视频」但仍黑屏 = 视频资产没过审或被执行器挡了 → 换序列帧长图，或换个执行器。
+**拖面板没反应？** 按在控件上了；换标题栏或行与行之间的空白。
 
-**BGM 不响？** 确认是音频 id（不是图片 id）、音量 > 0、执行器有 `SoundService` 权限；Roblox 部分音频有地区/隐私限制。
+**视频/音频不出？** 必须是平台资产：视频 → Development Items → Videos，音频 → Audio，都要审核通过；`GetProductInfo` 探测出来类型不对会直接提示。
 
-**BGM 一进游戏就停？** 角色出生点算了一次「传送」，把「传送后自动停」关掉，改用「最长播放」控制。
+**BGM 一进游戏就停？** 出生点算了一次传送，把「传送后自动停」关掉，用「最长播放」控制。
 
 **菜单没变化？** 「翻译」页点「重新扫描界面」，或调大 `waitTimeout`。
 
@@ -153,9 +138,9 @@ local CONFIG = {
 
 ## 边界
 
-- Roblox 没有 `backdrop-filter`，模糊的是 3D 场景，玻璃感来自场景模糊 + 半透明面板 + 高光/描边。
+- Roblox 没有 `backdrop-filter`，模糊的是 3D 场景；玻璃感来自场景模糊 + 半透明面板 + 高光。
 - MC 的 GLSL 光影包无法在 Roblox 运行，这里是观感映射。
-- 视频 / 音频都必须是平台资产；直链文件只能缓存，不能直接播。
+- 视频 / 音频必须是平台资产；直链只能缓存，不能直接播。
 - 中文走 CJK 回退字体，小字号会略糊。
 - hover 颜色可能短暂回弹（原脚本用 Tween 改色）。
 
@@ -168,4 +153,4 @@ $env:GITHUB_TOKEN = "ghp_xxx"     # 已有 gh 登录可省略
 powershell -ExecutionPolicy Bypass -File .\github\push.ps1
 ```
 
-改完重跑一次就是更新（按 `sha` 覆盖）。细节见 [github/PUBLISH.md](github/PUBLISH.md)。
+改完重跑一次就是更新（按 `sha` 覆盖，含 `tools/`）。细节见 [github/PUBLISH.md](github/PUBLISH.md)。
