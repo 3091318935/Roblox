@@ -1,20 +1,25 @@
-# Doors HardCore · 无痕玻璃 Seamless Glass（v2）
+# Doors HardCore · 无痕玻璃 Seamless Glass（v3）
 
-把 `Zero0Star/RipperNewSound` 里 **Doors-HardCore.lua** 的界面，换成「无缝透明边框 + 壁纸 + 材质光影 + 文艺文案」的样子。
+把 `Zero0Star/RipperNewSound` 里 **Doors-HardCore.lua** 的界面，换成「无缝透明边框 + 壁纸 + 光影 + 中文」的样子。
 
 原脚本 **一行都没改**：它照常联网、照常跑 key 系统、照常工作；皮肤是它把界面建出来之后，在运行时逐层重绘上去的。
 
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/main/DoorsHardCore-Seamless.lua"))()
+```
+
 ---
 
-## 为什么只能「外挂一层」
+## v3 改了什么
 
-`Doors-HardCore.lua` 是 wearedevs 混淆过的单行巨物（字符串加密 + 控制流平坦化），里面没有可读的 UI 代码，也无从定位窗口构造函数。所以这里走的路是：
-
-```
-原脚本照跑 → 抓它新建的 ScreenGui → 挨个节点改外观（颜色 / 圆角 / 描边 / 字体 / 文案 / 缩放）
-```
-
-功能逻辑、按钮回调、事件连接，一律不碰。
+| 改动 | 说明 |
+| --- | --- |
+| **删掉材质覆写** | 不再遍历 `workspace` 改 `Material`，零副作用；只留光影 |
+| **光影可“识别”** | 和壁纸一样贴文字/链接：内置 MC 系风格名、`.json` 光影包、图片滤色片 |
+| **文案换正常中文** | 去掉文言味，改成流畅的简体中文翻译，可自定义词条 |
+| **壁纸能认视频** | Roblox 视频资产 → `VideoFrame` 原生循环；视频页链接自动抠 id |
+| **自动识别序列帧** | 长条拼图自动切成动画帧，一张图就是一段循环动画 |
+| **面板可拖动 + 瘦身** | 300×424 分四页；整块按住就能拖；被换肤的窗口还多一个拖动把手 |
 
 ---
 
@@ -22,115 +27,91 @@
 
 | 文件 | 说明 |
 | --- | --- |
-| `DoorsHardCore-Seamless.lua` | v2 换肤引擎，单文件、无依赖（约 2.5k 行） |
-| `DoorsHardCore-LiquidGlass.lua` | v1 液态玻璃版，留着当备份 |
-| `loader.lua` | 一行启动器（发布后把 `USER/REPO` 换成自己的仓库） |
+| `DoorsHardCore-Seamless.lua` | v3 引擎主体，单文件、无依赖 |
+| `DoorsHardCore-LiquidGlass.lua` | v1 液态玻璃版，备份 |
+| `loader.lua` | 一行启动器 |
 | `LICENSE` | MIT |
 | `github/` | 发布工具：`push.ps1` / `push.sh` / `PUBLISH.md` |
-| `README.md` | 本文件 |
 
 ---
 
 ## 用法
 
-**方式一（最快）**：把 `DoorsHardCore-Seamless.lua` 全选粘进执行器，回车。
+1. 整段粘进执行器回车；或 `loadstring` 远程载入。
+2. 右下角出现「无痕 · 外观」面板，`F2` 开合。
+3. 面板任意空白处按住就能拖；标题栏的 `–` 折叠、`×` 隐藏。
 
-**方式二（推荐）**：直接走已发布仓库，粘一行就能用：
+---
 
-```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/main/DoorsHardCore-Seamless.lua"))()
+## 面板四页
+
+### 外观
+
+模糊（场景 BlurEffect）/ 压暗 / 玻璃 / 描边 / 圆角 / 缩放，三个开关：无缝边框、顶部高光、窗口拖动把手；下面是 6 个色板 + 一根色调滑杆。
+
+- **描边拉到 0 = 完全无缝**：描边与分割线一起消失，只剩一层极淡玻璃。
+- **缩放** 会给窗口挂 `UIScale`，不改任何原始 `Size/Position`。
+
+### 壁纸
+
+贴链接 → 自动识别类型 → 加到列表（`×` 删除，会存进 `SG_Config.json`）。
+
+**能识别什么**
+
+| 贴的东西 | 识别结果 | 播放方式 |
+| --- | --- | --- |
+| `rbxassetid://数字` / 纯数字 | 图片 | 缓慢放大 / 轮播 / 静帧 |
+| 图片直链 `.png .jpg .webp` | 图片（下载进 `SG_Assets/` 缓存） | 同上 |
+| 一长条拼图（宽 ÷ 高 = 整数且 ≥3） | **序列帧** | 自动切帧循环播放 |
+| `rbxassetid://视频id`、`roblox.com/videos/…` | **视频资产** | `VideoFrame` 原生循环，卡帧会自动续播 |
+| `.mp4 / .webm` 直链 | 视频文件（先下载） | 见下方说明 |
+
+- **视频循环**：`Looped = true` + `Ended` 事件续播 + 每秒看门狗兜一次，三者叠着保证不卡在最后一帧。
+- **`.mp4` 直链的现实**：Roblox 客户端只认平台内的视频资产，本地文件通常播不了。脚本会把它下到 `SG_Assets/` 并提示你上传到 Creator Dashboard 换成视频 id —— 这条路是唯一能真·播放视频的。
+- 另有极光层（缓慢旋转的渐变光）、光尘、「仅菜单显示时出现」开关。
+
+### 光影
+
+同样支持「识别」：
+
+| 输入 | 识别结果 |
+| --- | --- |
+| `bsl` / `complementary` / `seus` / `sildur` / `kuda` / `vanilla` / `night` / `cinema` / `moon` / `neon` / `gloom`，或中文「冷月 / 霓虹 / 夜色 / 幽影 / 电影」 | 内置风格，直接应用 |
+| `https://….json` | 光影包，按字段加载 |
+| 任意图片链接 | 全屏滤色片（低透明度叠在画面上做色调） |
+
+内置的 MC 系风格是**观感映射**：把 BSL / Complementary / SEUS 那种暖高光、冷阴影、强泛光、轻微景深，翻译成 Roblox 自己的 `Brightness / Ambient / ColorShift_Top / ExposureCompensation` + `ColorCorrection / Bloom / DepthOfField / SunRays / Atmosphere`。GLSL 光影包本身在 Roblox 里跑不了，这是能做到的最接近的一层。
+
+**强度** 滑杆 0~1.6，整体缩放对比度、饱和、泛光、景深、雾浓度。**还原光影** 会把所有参数写回原值。
+
+**自己写一个光影包**（存成 `.json` 丢任意图床，贴链接即可）：
+
+```json
+{
+  "name": "My Pack",
+  "lighting": {
+    "Brightness": 1.25,
+    "Ambient": [84, 96, 112],
+    "OutdoorAmbient": "#4e5c6c",
+    "ColorShift_Top": [255, 240, 214],
+    "ExposureCompensation": 0.1
+  },
+  "cc":    { "TintColor": [255, 244, 226], "Contrast": 0.16, "Saturation": 0.18 },
+  "bloom": { "Intensity": 0.7, "Size": 26, "Threshold": 1.05 },
+  "dof":   { "FarIntensity": 0.12, "FocusDistance": 22, "InFocusRadius": 44 },
+  "sun":   { "Intensity": 0.12, "Spread": 0.9 },
+  "atmosphere": { "Density": 0.32, "Haze": 1.6, "Color": [199, 208, 220] },
+  "filterImage": "https://…/tint.png"
+}
 ```
 
-> 仓库：https://github.com/3091318935/Roblox ｜ 上传/更新流程见 [github/PUBLISH.md](github/PUBLISH.md)
+颜色支持 `[r,g,b]` 或 `"#rrggbb"`；字段扁平写（`"Brightness": 1.2`）也行。
 
-**方式三**：只想套皮肤、暂时不跑原脚本 → 把文件里的 `CONFIG.runOriginal` 改成 `false`。
+### 翻译
 
-运行后：
+开关 + 自定义词条（`原文=中文, Settings=设置`）。词表覆盖了常见的界面词：`Enabled → 已启用`、`Settings → 设置`、`Keybind → 快捷键`、`Entity → 实体`、`Give → 给予`…
 
-1. 右下角出现 **「夜行 · 无痕」** 调参卡；
-2. 原脚本正常加载，它的菜单被就地重绘；
-3. `F2` 开合调参卡（`CONFIG.panelKey` 可改）。
-
----
-
-## 面板分组
-
-### 光 · 玻璃
-
-| 控件 | 作用 |
-| --- | --- |
-| 雾化 BLUR | 给场景挂 `BlurEffect`，0–24。玻璃感主要来自这里（Roblox 没有 `backdrop-filter`，模糊的是 3D 场景，不是 UI 后面的像素） |
-| 压暗 SCRIM | 全屏黑纱浓度 |
-| 玻璃 GLASS | 面板底色的不透明度 |
-| 描边 BORDER | **拉到 0 = 完全无缝**：描边、分割线一起消失，只剩一层极淡的玻璃 |
-| 圆角 RADIUS | 全局圆角 |
-| 尺幅 SCALE | 原 UI 整体缩放 0.6x–1.6x（给窗口挂 `UIScale`，不改布局） |
-| 无缝 / 高光 | 分割线开关 / 顶部高光与投影开关 |
-| 色板 + 色调 HUE | 强调色：6 个预设 + 一根色相滑杆，全局彩色元素统一到该色相 |
-
-### 境 · 壁纸
-
-| 控件 | 作用 |
-| --- | --- |
-| 输入框 + 添加 | 贴链接就能加壁纸，支持三种写法（见下） |
-| 列表 | 已加的壁纸，`×` 删除；会写进 `SG_Config.json`，下次自动恢复 |
-| 动态方式 MOTION | 静帧 / **缓推镜头** / **多图轮播** / **整条帧带** / 视频 / 纯极光 |
-| 停留 / 速度 / 帧数 | 每张停留秒数、动画倍率、帧带切几帧 |
-| 壁纸 WALL | 壁纸浓度 |
-| 极光 / 光尘 | 一层缓慢旋转的渐变光 + 飘浮光点（纯 GUI，动态感来源之一） |
-| 仅菜单可见时生效 | 关掉菜单就收掉壁纸与雾化，正常跑图不挡视线 |
-
-**能贴什么链接**
-
-| 写法 | 例子 | 备注 |
-| --- | --- | --- |
-| Roblox 图片 id | `1234567890` 或 `rbxassetid://1234567890` | 最稳，不依赖执行器文件 API |
-| 图片直链 | `https://i.imgur.com/xxxx.png` | 需要执行器有 `writefile` + `getcustomasset`；脚本会下载到 `SG_Assets/` 并缓存 |
-| 视频资产 id | `rbxassetid://视频id`，并把模式切成「视频」 | 走 `VideoFrame`，需要该视频资产可用 |
-
-**动态壁纸怎么来**
-
-- **缓推镜头**：一张静态图也能动 —— 缓慢放大 + 平移（Ken Burns），配极光层就有呼吸感；
-- **多图轮播**：加 3–8 张图，自动交叉淡入淡出；
-- **整条帧带**：一张横向拼好的序列帧（比如 8 帧并排），脚本会从 PNG/JPEG 头里读到像素宽高，自动切成 8 帧循环播放；
-- **视频**：Roblox 视频资产，真·动态；
-- GIF 不能直接播（Roblox 不支持 GIF），会提示你拆图或换 mp4 视频 id。
-
-### 影 · 光影与材质
-
-| 控件 | 作用 |
-| --- | --- |
-| 光影 LIGHTING | 原始 / 暖调电影 / 冷月 / 霓虹 / 幽影。改 `Brightness`、`Ambient`、`ColorShift_Top`，并挂 `ColorCorrectionEffect`、`BloomEffect`、`DepthOfFieldEffect` |
-| 材质 MATERIAL | 原始 / 大理石 / 玻璃 / 金属 / 霓虹 / 木纹 / 布艺。遍历 `workspace` 把 `Material` + `Reflectance` 覆写（分批暂停，不卡死），跳过自己角色 |
-| 应用 / 还原 | 材质可反复应用；「还原材质」按记录表逐部件写回；「全部还原」连光影一起复位 |
-| 重新换肤 | 重扫一遍界面 |
-
-> 材质与光影都是**客户端本地**的，别人看到的是原样；对判定、碰撞没有任何影响。
-
-### 文 · 辞章
-
-| 控件 | 作用 |
-| --- | --- |
-| 文辞替换 | 开/关文艺词表 |
-| 自定义词条 | 格式 `原文=译文, Enabled=开卷, Settings=笺注`，覆盖内置词表 |
-| 重新换肤 / 洗砚 | 重扫界面 / 全部回到初始状态 |
-
-内置词表把界面里常见的英文词换成文言味的中文（`Enabled → 开卷`、`Settings → 笺注`、`Keybind → 手札`、`Entity → 异影`…）。
-
-**不会把动态文本改坏**：脚本会记住自己写进去的那份字；如果原脚本后来改了同一处文字（计数、键位、状态），它会把这当成新原文重新判断，不会强行改回去。
-
----
-
-## 排版为什么算「更简洁」
-
-在不碰原有控件层级、不改任何 `Size`/`Position` 的前提下：
-
-- 所有边框 `BorderSizePixel = 0`，圆角统一（窗口 16 / 控件 6–12）；
-- 分割线在无缝模式下整条隐去，不再有硬线把内容切碎；
-- `ScrollingFrame` 滚动条收细到 3px、透明度统一；
-- 字体统一 Gotham 族（≥18px 用 Bold），文字描边一律去掉；
-- 彩色元素全部归到强调色相，不再红黄蓝紫打架；
-- 窗口 22px 柔和投影 + 顶部 1px 高光 + 从顶到底的玻璃光泽，替代原来的实心深灰。
+会记住自己写进去的那份字：原脚本后来改了同一处文字（计数、键位、状态），脚本把这当成新原文重新判断，不会强行改回去。
 
 ---
 
@@ -138,74 +119,56 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/mai
 
 ```lua
 local CONFIG = {
-    scriptUrl   = ".../Doors-HardCore.lua", -- 原脚本地址（可换镜像）
-    runOriginal = true,     -- false = 只加载皮肤
-    waitTimeout = 30,       -- 等界面出现的秒数
-    watchSeconds= 120,      -- 之后继续监听新控件的秒数
+    scriptUrl   = ".../Doors-HardCore.lua",
+    runOriginal = true,      -- false = 只加载皮肤
+    waitTimeout = 30,
+    watchSeconds= 120,
     panelKey    = Enum.KeyCode.F2,
 
-    theme = { accent=Color3.fromRGB(0,200,0), glass=0.72, border=0.35,
-              corner=16, scale=1, seamless=true, chrome=true, textStyle=true },
-    backdrop = { items={},  -- 预置壁纸，例如 {"rbxassetid://123456"}
-                 mode="pan", hold=9, speed=1, dim=0.20, wall=0.94,
-                 aurora=true, dust=false, blur=10, followWindow=true },
-    scene = { lights="off", material="off" },  -- 开局就套预设
+    theme = { accent = Color3.fromRGB(0,200,0), glass = 0.74, border = 0.30,
+              corner = 14, scale = 1, seamless = true, chrome = true,
+              translate = true, grip = true },
+    backdrop = { items = {}, mode = "auto", hold = 8, speed = 1, dim = 0.18,
+                 wall = 0.95, aurora = true, dust = false, blur = 8, followWindow = true },
+    shade = { preset = "vanilla", power = 1 },
 }
 ```
 
-面板里的改动会存到 `SG_Config.json`（执行器工作目录），下次启动自动读回；壁纸缓存在 `SG_Assets/`。
+面板改动会存进 `SG_Config.json`，壁纸缓存在 `SG_Assets/`，下次启动自动恢复。
 
 ---
 
 ## 常见问题
 
-**菜单没变化？**
-点面板的「重新换肤」。还不行：把 `waitTimeout` 调到 60；确认执行器有 `loadstring` 和 `game:HttpGet`；有些执行器 `CoreGui` 受保护，脚本会自动退回 `PlayerGui`（那样若手机端有权限问题，换个执行器更省事）。
+**菜单没变化？** 面板「翻译」页点「重新扫描界面」；或把 `waitTimeout` 提到 60。
 
-**壁纸直链没反应？**
-执行器要支持 `writefile` + `getcustomasset`。不支持就改用 Roblox 图片 id（`rbxassetid://...`），那条路不需要文件 API。
+**视频只出一帧 / 黑屏？** 直链 mp4 播不了是平台限制，换成 Roblox 视频资产 id；确认视频资产本身是「已验证」状态。
 
-**雾化把画面糊住了？**
-「雾化」拉到 0，或关掉「仅菜单可见时生效」。
+**序列帧被误判？** 播放方式从「自动识别」切成「缓慢放大」或「静帧」即可覆盖。
 
-**缩放之后窗口跑偏？**
-`UIScale` 是按控件锚点缩放的，原窗口锚点不在左上就会往一侧长。把「尺幅」拉回 1 即恢复。
+**光影太亮 / 太糊？** 拉低「强度」，或直接「还原光影」。
 
-**文字看不清？**
-「玻璃」拉高、「压暗」加大，或换成白色强调色。
+**文字看不清？** 玻璃调高、压暗加大，或换白色强调色。
 
-**hover 时颜色会回弹？**
-原脚本若用 Tween 改 hover 颜色，会短暂跳回它自己的配色 —— 运行时换肤的固有限制，除非改它源码（混淆，改不了）。
-
-**想彻底恢复？**
-面板「洗砚」→ 光影材质一起还原；或者直接重新进游戏。
+**想彻底恢复？** 「翻译」页的「恢复默认」+「光影」页的「还原光影」；或重新进游戏。
 
 ---
 
-## 边界说明
+## 边界
 
-- Roblox 没有 CSS 的 `backdrop-filter`，**无法模糊 GUI 后面的像素**；玻璃感来自「场景 3D 模糊 + 半透明面板 + 高光/描边」。
-- 中文用的是 Roblox 的 CJK 回退字体，字号偏小时会略糊。
-- 材质覆写会遍历 `workspace`，大场景下第一遍大约几秒（分批让帧）。
-- **物品贴图（TextureId）没有做通用替换**：Doors 的道具是各自的模型/贴图，要按名字逐个改，容易误伤实体判定；所以这里只做「材质 + 反射率」这一层，加上 Lighting 后处理当光影。
-- 壁纸直链依赖执行器的 `writefile` / `getcustomasset`；`rbxassetid://` 那条路不需要文件 API。
-- hover 颜色可能短暂回弹：原脚本用 Tween 改色时会跳回它自己的配色，运行时换肤绕不过去。
+- Roblox 没有 `backdrop-filter`，模糊的是 3D 场景，不是 UI 背后的像素；玻璃感来自场景模糊 + 半透明面板 + 高光/描边。
+- MC 的 GLSL 光影包无法在 Roblox 运行，这里是观感映射 + 可调强度。
+- 视频只有 Roblox 视频资产能原生循环；本地/直链 mp4 需要先上传。
+- 中文走 Roblox 的 CJK 回退字体，字号很小时会略糊。
+- hover 颜色可能短暂回弹：原脚本用 Tween 改色时会跳回它自己的配色。
 
 ---
 
-## 发布 / 分享
-
-仓库里自带一键发布（REST API，不需要装 git）：
+## 发布 / 更新
 
 ```powershell
-$env:GITHUB_TOKEN = "ghp_xxx"          # fine-grained 给 Contents + Administration 读写；classic 给 repo
+$env:GITHUB_TOKEN = "ghp_xxx"     # 或已有 gh 登录，可省略
 powershell -ExecutionPolicy Bypass -File .\github\push.ps1
 ```
 
-它会：建仓库（默认 `DoorsHardCore-SeamlessGlass`，`-Repo` 可改）→ 上传 6 个文件 → 把 `loader.lua` 里的占位符换成你的真实地址 → 把下面这行复制到剪贴板：
-
-```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/USER/REPO/main/DoorsHardCore-Seamless.lua"))()
-```
-
-权限怎么配、怎么手传、以后怎么更新、踩坑对照表 → [github/PUBLISH.md](github/PUBLISH.md)。
+改完文件重跑一次就是更新（脚本按 `sha` 覆盖）。细节见 [github/PUBLISH.md](github/PUBLISH.md)。
