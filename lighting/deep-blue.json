@@ -1,0 +1,30 @@
+{
+  "name": "深蓝",
+  "note": "水下蓝绿 + 厚雾，进 Doors 走廊会很像沉底",
+  "lighting": {
+    "Brightness": 0.62,
+    "Ambient": [26, 50, 62],
+    "OutdoorAmbient": [22, 44, 56],
+    "ColorShift_Top": [104, 196, 208],
+    "ColorShift_Bottom": [18, 40, 52],
+    "ExposureCompensation": -0.02
+  },
+  "cc": {
+    "TintColor": [174, 222, 224],
+    "Contrast": 0.12,
+    "Saturation": -0.1,
+    "Brightness": -0.03
+  },
+  "bloom": {
+    "Intensity": 0.4,
+    "Size": 26,
+    "Threshold": 1.22
+  },
+  "atmosphere": {
+    "Density": 0.64,
+    "Haze": 3.6,
+    "Color": [38, 92, 102],
+    "Decay": [14, 42, 50],
+    "Glare": 0.04
+  }
+}
