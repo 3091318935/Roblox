@@ -1,0 +1,38 @@
+{
+  "name": "无痕 · 光影包清单",
+  "version": 1,
+  "format": "seamless-shade-pack/1",
+  "note": "面板「光影」页点「一键拉云端清单」可直接读这个文件；也可以复制单个包的 raw 链接，贴进「导入并应用」",
+  "packs": [
+    {
+      "name": "极光夜",
+      "desc": "深蓝底 + 青绿天光",
+      "url": "https://raw.githubusercontent.com/3091318935/Roblox/main/lighting/aurora-night.json"
+    },
+    {
+      "name": "暮金",
+      "desc": "落日橙调 + 强泛光",
+      "url": "https://raw.githubusercontent.com/3091318935/Roblox/main/lighting/dusk-gold.json"
+    },
+    {
+      "name": "铅灰暴雨",
+      "desc": "低饱和 + 厚雾",
+      "url": "https://raw.githubusercontent.com/3091318935/Roblox/main/lighting/storm-grey.json"
+    },
+    {
+      "name": "雪盲",
+      "desc": "极亮冷白",
+      "url": "https://raw.githubusercontent.com/3091318935/Roblox/main/lighting/snow-blind.json"
+    },
+    {
+      "name": "深蓝",
+      "desc": "水下蓝绿 + 厚雾",
+      "url": "https://raw.githubusercontent.com/3091318935/Roblox/main/lighting/deep-blue.json"
+    },
+    {
+      "name": "暖胶",
+      "desc": "偏黄底片味 + 轻景深",
+      "url": "https://raw.githubusercontent.com/3091318935/Roblox/main/lighting/film-warm.json"
+    }
+  ]
+}
