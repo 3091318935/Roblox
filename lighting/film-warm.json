@@ -1,0 +1,28 @@
+{
+  "name": "暖胶",
+  "note": "偏黄底片味 + 轻景深，截图好看",
+  "lighting": {
+    "Brightness": 1.02,
+    "Ambient": [92, 82, 66],
+    "OutdoorAmbient": [86, 76, 62],
+    "ColorShift_Top": [246, 224, 186],
+    "ExposureCompensation": 0.04
+  },
+  "cc": {
+    "TintColor": [246, 226, 186],
+    "Contrast": 0.15,
+    "Saturation": -0.26,
+    "Brightness": 0.02
+  },
+  "bloom": {
+    "Intensity": 0.44,
+    "Size": 24,
+    "Threshold": 1.16
+  },
+  "dof": {
+    "FarIntensity": 0.16,
+    "FocusDistance": 22,
+    "InFocusRadius": 44,
+    "NearIntensity": 0.1
+  }
+}
