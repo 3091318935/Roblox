@@ -1,10 +1,16 @@
 --=====================================================================
---  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v7)
---  运行时换肤 + 壁纸引擎 + 光影风格包 + 中文翻译 + 开场 BGM
+--  Doors HardCore  ·  无痕玻璃  Seamless Glass  (v8)
+--  运行时换肤 + 壁纸引擎 + 光影清单/光影包 + 全员血量 + 中文翻译 + 开场 BGM
 -----------------------------------------------------------------------
 --  原脚本（一行未改）：
 --    https://pastefy.app/Bf6hbDY4/raw
 --    备用源： https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Doors-HardCore.lua
+--
+--  v8：
+--    · 光影改成清单式：分 5 组共 25 套内置（白天 / 傍晚夜景 / 氛围 / 风格化 / 还原）
+--    · 光影包可下载导入：贴 index.json 拉云端清单、贴单个 .json 直接导入，导入项存 SG_Shade.json
+--    · 新增「光影下载页」按钮 → 仓库 lighting/ 目录（自带 6 套可下的 JSON 包）
+--    · 新增「血量」页：全员 HP 数字 + 血条，可切距离 / 只看存活 / 按血量排序
 --
 --  v5.1：
 --    · 原脚本地址换到 pastefy（Bf6hbDY4），拉取失败自动回落到 GitHub 备用源
@@ -72,6 +78,13 @@ local CONFIG = {
 	shade = {
 		preset = "vanilla",
 		power  = 1,
+	},
+	hud = {
+		on         = false,   -- 全员血量 HUD
+		dist       = true,    -- 显示距离
+		aliveOnly  = true,    -- 只看存活
+		sortByHp   = false,   -- 按血量从高到低
+		fontSize   = 1,       -- 字号倍率
 	},
 }
 
@@ -259,6 +272,12 @@ local T = {
 
 	shadePower = CONFIG.shade.power,
 	tab        = "look",
+
+	hpHud   = CONFIG.hud.on,
+	hpDist  = CONFIG.hud.dist,
+	hpAlive = CONFIG.hud.aliveOnly,
+	hpSort  = CONFIG.hud.sortByHp,
+	hpSize  = CONFIG.hud.fontSize,
 
 	tint  = Color3.fromRGB(9, 20, 16),
 	tint2 = Color3.fromRGB(22, 36, 30),
@@ -476,9 +495,13 @@ end
 --  4.1 · 打开网页（官方上传页指引）
 --=====================================================================
 local LINKS = {
-	creations = "https://create.roblox.com/dashboard/creations",
-	docs      = "https://create.roblox.com/docs/production/publishing/uploading-assets",
-	audioDocs = "https://create.roblox.com/docs/audio/assets",
+	creations  = "https://create.roblox.com/dashboard/creations",
+	docs       = "https://create.roblox.com/docs/production/publishing/uploading-assets",
+	audioDocs  = "https://create.roblox.com/docs/audio/assets",
+	shadePage  = "https://github.com/3091318935/Roblox/tree/main/lighting",
+	shadeIndex = "https://raw.githubusercontent.com/3091318935/Roblox/main/lighting/index.json",
+	shadeDocs  = "https://create.roblox.com/docs/environment/lighting",
+	shadeStore = "https://create.roblox.com/store/models?keyword=lighting",
 }
 
 local function openUrl(url)
@@ -1221,9 +1244,122 @@ local SHADES = {
 		cc = { TintColor = rgb(186, 205, 212), Contrast = 0.18, Saturation = -0.22, Brightness = -0.03 },
 		dof = { FarIntensity = 0.1, FocusDistance = 26, InFocusRadius = 38, NearIntensity = 0.1 },
 	},
+	dawn = {
+		name = "晨曦",
+		lighting = { Brightness = 1.15, Ambient = rgb(104, 100, 118), OutdoorAmbient = rgb(96, 94, 112), ColorShift_Top = rgb(255, 226, 206) },
+		cc = { TintColor = rgb(255, 232, 216), Contrast = 0.08, Saturation = 0.12, Brightness = 0.05 },
+		bloom = { Intensity = 0.5, Size = 26, Threshold = 1.1 },
+		atmosphere = { Density = 0.3, Haze = 1.6, Color = rgb(226, 214, 226), Decay = rgb(140, 126, 140), Glare = 0.12 },
+	},
+	noon = {
+		name = "正午",
+		lighting = { Brightness = 1.6, Ambient = rgb(96, 102, 108), OutdoorAmbient = rgb(92, 98, 106), ColorShift_Top = rgb(255, 252, 240), ExposureCompensation = 0.2 },
+		cc = { TintColor = rgb(255, 250, 238), Contrast = 0.26, Saturation = 0.14, Brightness = 0.03 },
+		bloom = { Intensity = 0.9, Size = 28, Threshold = 1 },
+		sun = { Intensity = 0.25, Spread = 1 },
+		atmosphere = { Density = 0.22, Haze = 1, Color = rgb(206, 214, 222), Decay = rgb(120, 124, 132), Glare = 0.2 },
+	},
+	dusk = {
+		name = "黄昏",
+		lighting = { Brightness = 1.05, Ambient = rgb(92, 74, 72), OutdoorAmbient = rgb(86, 68, 66), ColorShift_Top = rgb(255, 186, 138), ExposureCompensation = 0.1 },
+		cc = { TintColor = rgb(255, 206, 166), Contrast = 0.18, Saturation = 0.22, Brightness = 0.02 },
+		bloom = { Intensity = 0.75, Size = 30, Threshold = 1.05 },
+		sun = { Intensity = 0.3, Spread = 1 },
+		atmosphere = { Density = 0.42, Haze = 2.2, Color = rgb(236, 186, 150), Decay = rgb(150, 104, 90), Glare = 0.15 },
+	},
+	storm = {
+		name = "雷雨",
+		lighting = { Brightness = 0.8, Ambient = rgb(58, 64, 70), OutdoorAmbient = rgb(54, 60, 68), ColorShift_Top = rgb(178, 190, 204) },
+		cc = { TintColor = rgb(196, 206, 214), Contrast = 0.2, Saturation = -0.18, Brightness = -0.03 },
+		bloom = { Intensity = 0.28, Size = 20, Threshold = 1.3 },
+		atmosphere = { Density = 0.55, Haze = 3.2, Color = rgb(140, 150, 162), Decay = rgb(70, 76, 86), Glare = 0 },
+	},
+	snow = {
+		name = "雪原",
+		lighting = { Brightness = 1.45, Ambient = rgb(120, 128, 140), OutdoorAmbient = rgb(114, 122, 136), ColorShift_Top = rgb(240, 248, 255), ExposureCompensation = 0.25 },
+		cc = { TintColor = rgb(238, 246, 255), Contrast = 0.06, Saturation = -0.12, Brightness = 0.06 },
+		bloom = { Intensity = 0.6, Size = 30, Threshold = 1.15 },
+		atmosphere = { Density = 0.46, Haze = 2.6, Color = rgb(232, 240, 250), Decay = rgb(140, 152, 168), Glare = 0.1 },
+	},
+	cave = {
+		name = "洞窟",
+		lighting = { Brightness = 0.35, Ambient = rgb(26, 26, 30), OutdoorAmbient = rgb(22, 22, 26), ColorShift_Top = rgb(120, 120, 130) },
+		cc = { TintColor = rgb(180, 180, 190), Contrast = 0.14, Saturation = -0.3, Brightness = -0.05 },
+		bloom = { Intensity = 0.2, Size = 14, Threshold = 1.4 },
+		atmosphere = { Density = 0.7, Haze = 1, Color = rgb(50, 50, 58), Decay = rgb(20, 20, 26), Glare = 0 },
+	},
+	blood = {
+		name = "血月",
+		lighting = { Brightness = 0.75, Ambient = rgb(52, 26, 28), OutdoorAmbient = rgb(46, 22, 24), ColorShift_Top = rgb(255, 110, 96) },
+		cc = { TintColor = rgb(255, 160, 150), Contrast = 0.22, Saturation = 0.18, Brightness = -0.02 },
+		bloom = { Intensity = 0.4, Size = 22, Threshold = 1.15 },
+		atmosphere = { Density = 0.5, Haze = 2.4, Color = rgb(120, 46, 44), Decay = rgb(60, 20, 22), Glare = 0.12 },
+	},
+	cyber = {
+		name = "赛博",
+		lighting = { Brightness = 1.15, Ambient = rgb(38, 20, 58), OutdoorAmbient = rgb(34, 18, 52), ColorShift_Top = rgb(120, 240, 255) },
+		cc = { TintColor = rgb(236, 214, 255), Contrast = 0.24, Saturation = 0.42, Brightness = 0.02 },
+		bloom = { Intensity = 1.1, Size = 32, Threshold = 0.9 },
+		atmosphere = { Density = 0.34, Haze = 1.4, Color = rgb(96, 60, 140), Decay = rgb(40, 24, 60), Glare = 0.2 },
+	},
+	film = {
+		name = "胶片",
+		lighting = { Brightness = 1.05, Ambient = rgb(86, 80, 70), OutdoorAmbient = rgb(80, 74, 66), ColorShift_Top = rgb(255, 238, 214) },
+		cc = { TintColor = rgb(255, 232, 200), Contrast = 0.14, Saturation = -0.1, Brightness = 0.02 },
+		bloom = { Intensity = 0.5, Size = 24, Threshold = 1.1 },
+		dof = { FarIntensity = 0.18, FocusDistance = 20, InFocusRadius = 44, NearIntensity = 0.12 },
+	},
+	cartoon = {
+		name = "卡通",
+		lighting = { Brightness = 1.5, Ambient = rgb(120, 124, 132), OutdoorAmbient = rgb(116, 120, 130), ColorShift_Top = rgb(255, 255, 255), ExposureCompensation = 0.15 },
+		cc = { TintColor = rgb(255, 255, 255), Contrast = 0.32, Saturation = 0.5, Brightness = 0.05 },
+		bloom = { Intensity = 0.3, Size = 18, Threshold = 1.3 },
+	},
+	deep = {
+		name = "深海",
+		lighting = { Brightness = 0.55, Ambient = rgb(24, 48, 60), OutdoorAmbient = rgb(20, 42, 54), ColorShift_Top = rgb(96, 190, 200) },
+		cc = { TintColor = rgb(170, 220, 220), Contrast = 0.12, Saturation = -0.14, Brightness = -0.04 },
+		bloom = { Intensity = 0.35, Size = 26, Threshold = 1.25 },
+		atmosphere = { Density = 0.62, Haze = 3.4, Color = rgb(40, 96, 104), Decay = rgb(16, 44, 52), Glare = 0 },
+	},
+	space = {
+		name = "太空",
+		lighting = { Brightness = 0.5, Ambient = rgb(14, 14, 20), OutdoorAmbient = rgb(10, 10, 16), ColorShift_Top = rgb(180, 200, 255) },
+		cc = { TintColor = rgb(210, 220, 255), Contrast = 0.3, Saturation = -0.2, Brightness = -0.06 },
+		bloom = { Intensity = 0.45, Size = 18, Threshold = 1.2 },
+		sun = { Intensity = 0.05, Spread = 0.4 },
+	},
+	aurora = {
+		name = "极光",
+		lighting = { Brightness = 0.95, Ambient = rgb(40, 52, 72), OutdoorAmbient = rgb(34, 48, 68), ColorShift_Top = rgb(140, 255, 220) },
+		cc = { TintColor = rgb(190, 246, 236), Contrast = 0.12, Saturation = 0.3, Brightness = 0.03 },
+		bloom = { Intensity = 0.7, Size = 30, Threshold = 1.05 },
+		atmosphere = { Density = 0.4, Haze = 2.2, Color = rgb(72, 120, 140), Decay = rgb(32, 60, 86), Glare = 0.15 },
+	},
+	vintage = {
+		name = "复古",
+		lighting = { Brightness = 1, Ambient = rgb(94, 84, 68), OutdoorAmbient = rgb(88, 78, 64), ColorShift_Top = rgb(240, 220, 180) },
+		cc = { TintColor = rgb(246, 226, 186), Contrast = 0.16, Saturation = -0.28, Brightness = 0.02 },
+		bloom = { Intensity = 0.4, Size = 22, Threshold = 1.2 },
+		dof = { FarIntensity = 0.1, FocusDistance = 24, InFocusRadius = 46, NearIntensity = 0.1 },
+	},
 }
 
-local SHADE_ORDER = { "vanilla", "bsl", "complementary", "seus", "sildur", "kuda", "night", "cinema", "moon", "neon", "gloom" }
+-- 清单分组：面板「光影」页按这个顺序铺开，一次看全，不用一根按钮一直转
+local SHADE_GROUPS = {
+	{ name = "还原", keys = { "vanilla" } },
+	{ name = "白天", keys = { "bsl", "complementary", "kuda", "noon", "dawn", "snow" } },
+	{ name = "傍晚 · 夜景", keys = { "cinema", "dusk", "night", "moon", "aurora" } },
+	{ name = "氛围", keys = { "neon", "cyber", "blood", "storm", "cave", "deep", "space" } },
+	{ name = "风格化", keys = { "seus", "sildur", "film", "vintage", "cartoon", "gloom" } },
+}
+
+local SHADE_ORDER = {}
+for _, g in ipairs(SHADE_GROUPS) do
+	for _, k in ipairs(g.keys) do
+		if SHADES[k] then table.insert(SHADE_ORDER, k) end
+	end
+end
 
 local SHADE_ALIAS = {
 	bsl = "bsl", bslshader = "bsl", bslshaders = "bsl",
@@ -1239,6 +1375,20 @@ local SHADE_ALIAS = {
 	gloom = "gloom", dark = "gloom", horror = "gloom",
 	["原版"] = "vanilla", ["冷月"] = "moon", ["霓虹"] = "neon", ["夜色"] = "night",
 	["幽影"] = "gloom", ["电影"] = "cinema", ["暖调"] = "cinema", ["明亮"] = "kuda",
+	dawn = "dawn", morning = "dawn", ["晨曦"] = "dawn", ["清晨"] = "dawn",
+	noon = "noon", day = "noon", ["正午"] = "noon", ["白天"] = "noon",
+	dusk = "dusk", sunset = "dusk", ["黄昏"] = "dusk", ["落日"] = "dusk",
+	storm = "storm", rain = "storm", ["雷雨"] = "storm", ["暴雨"] = "storm",
+	snow = "snow", ["雪原"] = "snow", ["雪"] = "snow",
+	cave = "cave", ["洞窟"] = "cave", ["洞穴"] = "cave",
+	blood = "blood", ["血月"] = "blood", red = "blood",
+	cyber = "cyber", ["赛博"] = "cyber", ["赛博朋克"] = "cyber",
+	film = "film", ["胶片"] = "film", ["电影感"] = "film",
+	cartoon = "cartoon", ["卡通"] = "cartoon", anime = "cartoon",
+	deep = "deep", ["深海"] = "deep", sea = "deep",
+	space = "space", ["太空"] = "space", galaxy = "space",
+	aurora = "aurora", ["极光"] = "aurora",
+	vintage = "vintage", retro = "vintage", ["复古"] = "vintage",
 }
 
 local LIGHT_KEYS = { "Brightness", "Ambient", "OutdoorAmbient", "ColorShift_Top", "ColorShift_Bottom",
@@ -1522,6 +1672,137 @@ local function normalizePack(raw)
 	return prof
 end
 
+--── 光影包：清单 + 下载导入 ────────────────────────────────────────
+Shade.custom = {}          -- { {name=..., url=...}, ... }  已导入 / 云端清单
+local PACK_FILE = "SG_Shade.json"
+
+function Shade.savePacks()
+	if type(writefile) ~= "function" then return end
+	local out = {}
+	for _, it in ipairs(Shade.custom) do
+		table.insert(out, { name = it.name, url = it.url })
+	end
+	local ok, json = pcall(function() return game:GetService("HttpService"):JSONEncode(out) end)
+	if ok then pcall(function() writefile(PACK_FILE, json) end) end
+end
+
+function Shade.loadPacks()
+	if type(readfile) ~= "function" then return end
+	local ok, raw = pcall(function() return readfile(PACK_FILE) end)
+	if not ok or type(raw) ~= "string" or #raw < 4 then return end
+	local ok2, list = pcall(function() return game:GetService("HttpService"):JSONDecode(raw) end)
+	if not ok2 or type(list) ~= "table" then return end
+	for _, it in ipairs(list) do
+		if type(it) == "table" and type(it.url) == "string" and it.url ~= "" then
+			table.insert(Shade.custom, { name = tostring(it.name or "光影包"), url = it.url })
+		end
+	end
+end
+
+local function fetchJson(url)
+	local ok, body = pcall(function() return game:HttpGet(url, true) end)
+	if not ok or type(body) ~= "string" or #body < 8 then return nil, "链接读不到内容（网络或链接失效）" end
+	local ok2, data = pcall(function() return game:GetService("HttpService"):JSONDecode(body) end)
+	if not ok2 then return nil, "内容不是合法 JSON" end
+	return data
+end
+
+function Shade.registerPack(url, name)
+	for _, it in ipairs(Shade.custom) do
+		if it.url == url then
+			it.name = name or it.name
+			return it
+		end
+	end
+	local it = { name = name or "光影包", url = url }
+	table.insert(Shade.custom, it)
+	Shade.savePacks()
+	if P.rebuildShade then pcall(P.rebuildShade) end
+	return it
+end
+
+-- 云端清单：支持 [ {name,url}, ... ] 或 { packs = [ ... ] }
+function Shade.fetchIndex(url)
+	url = trim(url)
+	if url == "" then return false, "先贴 index.json 链接" end
+	local data, err = fetchJson(url)
+	if not data then return false, err end
+	local list = data
+	if type(data) == "table" and type(data.packs) == "table" then list = data.packs end
+	if type(list) ~= "table" then return false, "清单格式不对（要数组）" end
+
+	local have = {}
+	for _, it in ipairs(Shade.custom) do have[it.url] = true end
+	local added = 0
+	for _, it in ipairs(list) do
+		local u, nm
+		if type(it) == "table" then
+			u = it.url or it.raw or it.file
+			nm = it.name or it.title
+		elseif type(it) == "string" then
+			u = it
+		end
+		if type(u) == "string" and u ~= "" and not have[u] then
+			table.insert(Shade.custom, { name = tostring(nm or "光影包"), url = u })
+			have[u] = true
+			added = added + 1
+		end
+	end
+	Shade.savePacks()
+	if P.rebuildShade then pcall(P.rebuildShade) end
+	if added == 0 then return false, "清单里没有新光影包" end
+	return true, string.format("云端清单载入 %d 套（在下面清单里点着用）", added)
+end
+
+function Shade.importPack(url, quiet)
+	url = trim(url)
+	if url == "" then return false, "先贴 .json 链接" end
+	local data, err = fetchJson(url)
+	if not data then return false, err end
+	local prof = normalizePack(data)
+	if not prof or (not prof.lighting and not prof.cc and not prof.bloom and not prof.dof and not prof.sun and not prof.atmosphere) then
+		return false, "这个 JSON 里没有可用光影字段"
+	end
+	Shade.registerPack(url, prof.name)
+	Shade.applyProfile(prof, prof.name)
+	Shade.entryNote = "已载入光影包：" .. prof.name
+	if not quiet then
+		Shade.entryNote = Shade.entryNote .. "（已存进清单）"
+	end
+	return true, Shade.entryNote
+end
+
+function Shade.applyCustom(i)
+	local it = Shade.custom[i]
+	if not it then return false, "清单里没有这一项" end
+	return Shade.importPack(it.url)
+end
+
+function Shade.removePack(i)
+	local it = Shade.custom[i]
+	if not it then return false, "清单里没有这一项" end
+	table.remove(Shade.custom, i)
+	Shade.savePacks()
+	if P.rebuildShade then pcall(P.rebuildShade) end
+	return true, "已从清单移除：" .. tostring(it.name)
+end
+
+-- 贴什么都行：清单（数组 / {packs=...}）或单套光影包
+function Shade.smartLoad(url)
+	url = trim(url)
+	if url == "" then return false, "先贴链接" end
+	local data, err = fetchJson(url)
+	if not data then return false, err end
+	if type(data) == "table" and (data[1] ~= nil or type(data.packs) == "table") then
+		return Shade.fetchIndex(url)
+	end
+	local prof = normalizePack(data)
+	if not prof then return false, "这个 JSON 既不是清单，也没有光影字段" end
+	Shade.registerPack(url, prof.name)
+	Shade.applyProfile(prof, prof.name)
+	return true, "已载入光影包：" .. prof.name
+end
+
 -- 识别：内置名 / JSON 包链接 / 图片滤色
 function Shade.recognize(text)
 	text = trim(text)
@@ -1547,8 +1828,9 @@ function Shade.recognize(text)
 				if ok2 then
 					local prof = normalizePack(raw)
 					if prof then
+						Shade.registerPack(text, prof.name)
 						Shade.applyProfile(prof, prof.name)
-						Shade.entryNote = "已识别：光影包 " .. prof.name
+						Shade.entryNote = "已载入光影包：" .. prof.name .. "（已存进清单）"
 						return true, Shade.entryNote
 					end
 				end
@@ -2214,14 +2496,273 @@ local function ensureBlur()
 end
 
 --=====================================================================
---  9 · 控制面板（五页签 + 标题栏拖动 + 瘦身）
+--  8.5 · 全员血量 HUD（只读 Humanoid，纯本地绘制，不碰数值）
+--=====================================================================
+local HPHud = {
+	gui = nil, root = nil, header = nil, title = nil,
+	rows = {}, count = 0, running = false,
+}
+
+local HP_GREEN = Color3.fromRGB(88, 226, 140)
+local HP_AMBER = Color3.fromRGB(255, 196, 84)
+local HP_RED   = Color3.fromRGB(255, 96, 88)
+local HP_DEAD  = Color3.fromRGB(126, 140, 134)
+
+local function hpColor(r)
+	if r <= 0 then return HP_DEAD end
+	if r < 0.3 then return HP_RED end
+	if r < 0.6 then return HP_AMBER end
+	return HP_GREEN
+end
+
+local function hpRow(i)
+	local frame = make("Frame", {
+		Name = "R" .. i,
+		Size = UDim2.new(1, 0, 0, 22),
+		BackgroundColor3 = T.tint,
+		BackgroundTransparency = 0.42,
+		BorderSizePixel = 0,
+		LayoutOrder = i,
+		Visible = false,
+	})
+	make("UICorner", { CornerRadius = UDim.new(0, 7), Parent = frame })
+
+	local name = make("TextLabel", {
+		Text = "",
+		Size = UDim2.new(1, -88, 0, 12),
+		Position = UDim2.new(0, 8, 0, 3),
+		BackgroundTransparency = 1,
+		Font = FONT_BODY,
+		TextSize = 10,
+		TextColor3 = T.text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = frame,
+	})
+	local hp = make("TextLabel", {
+		Text = "",
+		Size = UDim2.new(0, 80, 0, 12),
+		Position = UDim2.new(1, -8, 0, 3),
+		AnchorPoint = Vector2.new(0, 0),
+		BackgroundTransparency = 1,
+		Font = FONT_BODY,
+		TextSize = 10,
+		TextColor3 = T.text,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Parent = frame,
+	})
+	hp.Position = UDim2.new(1, -88, 0, 3)
+	hp.Size = UDim2.new(0, 80, 0, 12)
+
+	local track = make("Frame", {
+		Name = "Track",
+		Size = UDim2.new(1, -16, 0, 3),
+		Position = UDim2.new(0, 8, 0, 16),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.86,
+		BorderSizePixel = 0,
+		Parent = frame,
+	})
+	make("UICorner", { CornerRadius = UDim.new(1, 0), Parent = track })
+	local fill = make("Frame", {
+		Name = "Fill",
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = HP_GREEN,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		Parent = track,
+	})
+	make("UICorner", { CornerRadius = UDim.new(1, 0), Parent = fill })
+
+	return { frame = frame, name = name, hp = hp, fill = fill }
+end
+
+function HPHud.ensure()
+	if HPHud.gui and HPHud.gui.Parent then return HPHud.gui end
+	local gui = make("ScreenGui", {
+		Name = "SG_HP",
+		IgnoreGuiInset = true,
+		ResetOnSpawn = false,
+		DisplayOrder = 999997,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	})
+	attachGui(gui)
+	HPHud.gui = gui
+
+	local root = make("Frame", {
+		Name = "Root",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -14, 0, 92),
+		Size = UDim2.new(0, 210, 0, 26),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	make("UIListLayout", {
+		Padding = UDim.new(0, 4),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = root,
+	})
+	HPHud.root = root
+
+	local header = make("Frame", {
+		Name = "Header",
+		Size = UDim2.new(1, 0, 0, 22),
+		BackgroundColor3 = T.tint,
+		BackgroundTransparency = 0.3,
+		BorderSizePixel = 0,
+		LayoutOrder = 0,
+		Parent = root,
+	})
+	make("UICorner", { CornerRadius = UDim.new(0, 8), Parent = header })
+	HPHud.header = header
+	HPHud.title = make("TextLabel", {
+		Text = "全员血量",
+		Size = UDim2.new(1, -18, 1, 0),
+		Position = UDim2.new(0, 9, 0, 0),
+		BackgroundTransparency = 1,
+		Font = FONT_BOLD,
+		TextSize = 10,
+		TextColor3 = T.text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = header,
+	})
+	return gui
+end
+
+function HPHud.applyFont()
+	local s = clamp(T.hpSize or 1, 0.7, 1.6)
+	if HPHud.title then HPHud.title.TextSize = math.max(9, math.floor(10 * s + 0.5)) end
+	for _, r in ipairs(HPHud.rows) do
+		r.name.TextSize = math.max(8, math.floor(10 * s + 0.5))
+		r.hp.TextSize = math.max(8, math.floor(10 * s + 0.5))
+	end
+end
+
+function HPHud.update()
+	if not (HPHud.gui and HPHud.gui.Parent) then return end
+	if not T.hpHud then return end
+	HPHud.ensure()
+
+	local lpRoot
+	local lpChar = LocalPlayer and LocalPlayer.Character
+	if lpChar then
+		lpRoot = lpChar:FindFirstChild("HumanoidRootPart")
+	end
+
+	local data = {}
+	for _, pl in ipairs(Players:GetPlayers()) do
+		local char = pl.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		local hp = hum and hum.Health or 0
+		local max = hum and hum.MaxHealth or 100
+		if (not max) or max <= 0 then max = 100 end
+		local dead = (hp <= 0.01) or (not hum)
+		if (not (T.hpAlive and dead)) then
+			local dist
+			if T.hpDist and char and lpRoot then
+				local rp = char:FindFirstChild("HumanoidRootPart")
+					or char:FindFirstChild("UpperTorso")
+					or char:FindFirstChild("Torso")
+				if rp then
+					local ok, m = pcall(function() return (lpRoot.Position - rp.Position).Magnitude end)
+					if ok and m then dist = round(m) end
+				end
+			end
+			table.insert(data, {
+				name = pl.Name, hp = hp, max = max, dead = dead,
+				dist = dist, me = (pl == LocalPlayer),
+			})
+		end
+	end
+
+	if T.hpSort then
+		table.sort(data, function(a, b)
+			if a.dead ~= b.dead then return b.dead end
+			return a.hp > b.hp
+		end)
+	end
+
+	local s = clamp(T.hpSize or 1, 0.7, 1.6)
+	local ts = math.max(8, math.floor(10 * s + 0.5))
+	for i, d in ipairs(data) do
+		local r = HPHud.rows[i]
+		r = r or hpRow(i)
+		HPHud.rows[i] = r
+		if r.frame.Parent ~= HPHud.root then r.frame.Parent = HPHud.root end
+		r.frame.Visible = true
+		r.frame.LayoutOrder = i
+		r.frame.BackgroundColor3 = T.tint
+		r.name.TextSize = ts
+		r.hp.TextSize = ts
+		r.hp.TextColor3 = d.dead and T.dimc or T.text
+		r.name.TextColor3 = d.me and T.accent or T.text
+		r.name.Text = (d.me and "你 · " or "") .. d.name
+			.. (d.dist and string.format("  %dm", d.dist) or "")
+
+		local ratio = clamp(d.hp / math.max(1, d.max), 0, 1)
+		r.fill.Size = UDim2.new(ratio, 0, 1, 0)
+		r.fill.BackgroundColor3 = hpColor(ratio)
+		if d.dead then
+			r.hp.Text = "已倒下"
+		else
+			r.hp.Text = string.format("%d / %d", round(d.hp), round(d.max))
+		end
+	end
+	for i = #data + 1, #HPHud.rows do
+		HPHud.rows[i].frame.Visible = false
+	end
+
+	HPHud.count = #data
+	if HPHud.title then
+		HPHud.title.Text = string.format("全员血量 · %d 人", #data)
+	end
+end
+
+function HPHud.start()
+	if HPHud.running then return end
+	HPHud.running = true
+	schedule(function()
+		while HPHud.running do
+			pcall(HPHud.update)
+			pause(0.25)
+		end
+	end)
+end
+
+function HPHud.stop()
+	HPHud.running = false
+end
+
+function HPHud.setEnabled(on)
+	T.hpHud = on and true or false
+	HPHud.ensure()
+	if HPHud.gui then HPHud.gui.Enabled = T.hpHud end
+	if T.hpHud then
+		HPHud.start()
+		pcall(HPHud.update)
+	else
+		HPHud.stop()
+	end
+end
+
+function HPHud.destroy()
+	HPHud.stop()
+	if HPHud.gui then pcall(function() HPHud.gui:Destroy() end) end
+	HPHud.gui = nil
+	HPHud.rows = {}
+end
+
+--=====================================================================
+--  9 · 控制面板（六页签 + 标题栏拖动 + 瘦身）
 --=====================================================================
 local TAB_LIST = {
-	{ key = "look", name = "外观" },
-	{ key = "wall", name = "壁纸" },
+	{ key = "look",  name = "外观" },
+	{ key = "wall",  name = "壁纸" },
 	{ key = "shade", name = "光影" },
+	{ key = "hp",    name = "血量" },
 	{ key = "music", name = "音乐" },
-	{ key = "text", name = "翻译" },
+	{ key = "text",  name = "翻译" },
 }
 
 -- 拖动命中测试：只有按在控件上才不拖面板
@@ -3002,22 +3543,196 @@ local function buildPanel()
 
 	--──────── 光影 ────────
 	local bs = newBuilder(pageScroll("shade"))
-	local _, sNote = bs.note("识别结果：未应用", 24)
-	bs.input("风格名（bsl / seus…）或 .json 链接", "识别", function(box)
-		local ok, msg = Shade.recognize(box.Text)
+	local _, sNote = bs.note("识别结果：未应用", 20)
+
+	-- 清单：分组铺开，一行一套，点一下直接换（不再一根按钮一直转）
+	local LIST_H = 184
+	local sList = make("ScrollingFrame", {
+		Name = "ShadeList",
+		Size = UDim2.new(1, 0, 0, LIST_H),
+		Position = UDim2.new(0, 0, 0, bs.y),
+		BackgroundColor3 = T.tint2,
+		BackgroundTransparency = 0.72,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 2,
+		ScrollBarImageColor3 = T.accent,
+		ScrollBarImageTransparency = 0.5,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		Parent = bs.scroll,
+	})
+	make("UICorner", { CornerRadius = UDim.new(0, 8), Parent = sList })
+	make("UIPadding", {
+		PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5),
+		PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5),
+		Parent = sList,
+	})
+	bs.y = bs.y + LIST_H + 6
+	P.protect[sList] = true
+
+	local function listHeader(text, y)
+		make("TextLabel", {
+			Text = text,
+			Size = UDim2.new(1, -4, 0, 13),
+			Position = UDim2.new(0, 2, 0, y),
+			BackgroundTransparency = 1,
+			Font = FONT_BOLD,
+			TextSize = 9,
+			TextColor3 = T.dimc,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = sList,
+		})
+		return y + 15
+	end
+
+	local function listRow(text, y, active, cb)
+		local btn = make("TextButton", {
+			Text = "",
+			Size = UDim2.new(1, -4, 0, 22),
+			Position = UDim2.new(0, 2, 0, y),
+			BackgroundColor3 = active and T.accent or T.tint,
+			BackgroundTransparency = active and 0.7 or 0.55,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			Parent = sList,
+		})
+		make("UICorner", { CornerRadius = UDim.new(0, 6), Parent = btn })
+		make("TextLabel", {
+			Text = text,
+			Size = UDim2.new(1, -40, 1, 0),
+			Position = UDim2.new(0, 7, 0, 0),
+			BackgroundTransparency = 1,
+			Font = FONT_BODY,
+			TextSize = 10,
+			TextColor3 = T.text,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Parent = btn,
+		})
+		if active then
+			make("TextLabel", {
+				Text = "使用中",
+				Size = UDim2.new(0, 32, 1, 0),
+				Position = UDim2.new(1, -34, 0, 0),
+				BackgroundTransparency = 1,
+				Font = FONT_BODY,
+				TextSize = 8,
+				TextColor3 = T.text,
+				TextXAlignment = Enum.TextXAlignment.Right,
+				Parent = btn,
+			})
+		end
+		btn.MouseButton1Click:Connect(cb)
+		P.protect[btn] = true
+		return y + 24
+	end
+
+	local function rebuildShade()
+		for _, c in ipairs(sList:GetChildren()) do
+			if c:IsA("TextLabel") or c:IsA("TextButton") or c:IsA("Frame") then
+				pcall(function() c:Destroy() end)
+			end
+		end
+		local y = 0
+		for _, g in ipairs(SHADE_GROUPS) do
+			y = listHeader(g.name, y)
+			for _, key in ipairs(g.keys) do
+				local prof = SHADES[key]
+				if prof then
+					y = listRow(prof.name, y, Shade.profileKey == key, function()
+						Shade.applyKey(key)
+						sNote.Text = "已应用：" .. prof.name
+						rebuildShade()
+						if P.save then pcall(P.save) end
+					end)
+				end
+			end
+			y = y + 2
+		end
+
+		if #Shade.custom > 0 then
+			y = listHeader("我的光影包（下载 / 导入）", y)
+			for i, it in ipairs(Shade.custom) do
+				local row = make("Frame", {
+					Size = UDim2.new(1, -4, 0, 22),
+					Position = UDim2.new(0, 2, 0, y),
+					BackgroundColor3 = T.tint,
+					BackgroundTransparency = 0.55,
+					BorderSizePixel = 0,
+					Parent = sList,
+				})
+				make("UICorner", { CornerRadius = UDim.new(0, 6), Parent = row })
+				local main = make("TextButton", {
+					Text = "",
+					Size = UDim2.new(1, -24, 1, 0),
+					BackgroundTransparency = 1,
+					AutoButtonColor = false,
+					Parent = row,
+				})
+				make("TextLabel", {
+					Text = tostring(it.name),
+					Size = UDim2.new(1, -8, 1, 0),
+					Position = UDim2.new(0, 7, 0, 0),
+					BackgroundTransparency = 1,
+					Font = FONT_BODY,
+					TextSize = 10,
+					TextColor3 = T.text,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					Parent = main,
+				})
+				local del = make("TextButton", {
+					Text = "×",
+					Size = UDim2.new(0, 22, 1, 0),
+					Position = UDim2.new(1, -22, 0, 0),
+					BackgroundTransparency = 1,
+					AutoButtonColor = false,
+					Font = FONT_BODY,
+					TextSize = 11,
+					TextColor3 = T.dimc,
+					Parent = row,
+				})
+				main.MouseButton1Click:Connect(function()
+					local ok, msg = Shade.applyCustom(i)
+					sNote.Text = msg
+					toast(msg)
+					if ok then rebuildShade() end
+				end)
+				del.MouseButton1Click:Connect(function()
+					local ok, msg = Shade.removePack(i)
+					sNote.Text = msg
+					rebuildShade()
+				end)
+				P.protect[row] = true
+				P.protect[main] = true
+				P.protect[del] = true
+				y = y + 24
+			end
+		end
+
+		sList.CanvasSize = UDim2.new(0, 0, 0, y + 4)
+	end
+	P.rebuildShade = rebuildShade
+	rebuildShade()
+
+	bs.buttons({
+		{ text = "一键拉云端清单", accent = true, cb = function()
+			local ok, msg = Shade.fetchIndex(LINKS.shadeIndex)
+			sNote.Text = msg
+			toast(msg)
+			if ok then rebuildShade() end
+		end },
+		{ text = "光影下载页", cb = function() openUrl(LINKS.shadePage) end },
+	})
+	bs.input("index.json 清单 / 单个光影包 .json 直链", "导入", function(box)
+		local ok, msg = Shade.smartLoad(box.Text)
 		sNote.Text = msg
 		toast(msg)
 		if ok then
 			box.Text = ""
+			rebuildShade()
 			if P.save then pcall(P.save) end
 		end
-	end)
-	bs.cycler("内置风格", function() return Shade.label end, function()
-		local idx = 1
-		for i, k in ipairs(SHADE_ORDER) do if k == Shade.profileKey then idx = i break end end
-		local key = SHADE_ORDER[idx % #SHADE_ORDER + 1]
-		Shade.applyKey(key)
-		sNote.Text = "已应用：" .. (SHADES[key] and SHADES[key].name or key)
 	end)
 	bs.slider("强度", 0, 1.6, 0.01, function() return T.shadePower end, function(v)
 		Shade.setPower(v)
@@ -3032,20 +3747,61 @@ local function buildPanel()
 		{ text = "还原光影", cb = function()
 			Shade.reset()
 			sNote.Text = Shade.entryNote
+			rebuildShade()
 			toast("光影已还原")
 		end },
-		{ text = "重新应用", cb = function()
-			if Shade.profile then
-				Shade.applyProfile(Shade.profile, Shade.label)
-			else
-				Shade.applyKey(Shade.profileKey)
-			end
-			sNote.Text = Shade.entryNote
-			toast("已重新应用")
+		{ text = "光照文档", cb = function() openUrl(LINKS.shadeDocs) end },
+	})
+	bs.note("Roblox 跑不了 MC 的 GLSL：清单里 25 套是把 BSL / Complementary / SEUS 这类观感映射成引擎自带的色调映射、泛光、景深、太阳光、雾气。「我的光影包」= 从 lighting/index.json 拉下来或自己贴 .json 导入的包，点一行就换。", 46)
+	bs.finish()
+
+	--──────── 血量 ────────
+	local bh = newBuilder(pageScroll("hp"))
+	local _, hNote = bh.note("未开启：打开下面的开关，右上角就出全员血量列表", 22)
+	bh.switch("全员血量显示", function() return T.hpHud end, function(v)
+		T.hpHud = v
+		HPHud.setEnabled(v)
+		hNote.Text = v and string.format("已开启：当前 %d 人", HPHud.count or 0) or "已关闭"
+		if P.save then pcall(P.save) end
+	end)
+	bh.switch("显示距离", function() return T.hpDist end, function(v)
+		T.hpDist = v
+		pcall(HPHud.update)
+		if P.save then pcall(P.save) end
+	end)
+	bh.switch("只看存活", function() return T.hpAlive end, function(v)
+		T.hpAlive = v
+		pcall(HPHud.update)
+		if P.save then pcall(P.save) end
+	end)
+	bh.switch("按血量排序", function() return T.hpSort end, function(v)
+		T.hpSort = v
+		pcall(HPHud.update)
+		if P.save then pcall(P.save) end
+	end)
+	bh.slider("列表字号", 0.8, 1.6, 0.01, function() return T.hpSize end, function(v)
+		T.hpSize = v
+		HPHud.applyFont()
+		pcall(HPHud.update)
+	end)
+	bh.buttons({
+		{ text = "立即刷新", accent = true, cb = function()
+			T.hpHud = true
+			HPHud.setEnabled(true)
+			hNote.Text = string.format("已刷新：当前 %d 人", HPHud.count or 0)
+			toast(hNote.Text)
+			refresh()
+		end },
+		{ text = "关闭显示", cb = function()
+			T.hpHud = false
+			HPHud.setEnabled(false)
+			hNote.Text = "已关闭"
+			refresh()
+			if P.save then pcall(P.save) end
 		end },
 	})
-	bs.note("Roblox 跑不了 MC 的 GLSL 光影包：这里把 BSL / Complementary / SEUS 这类观感映射成 Roblox 自带的色调映射、泛光、景深、太阳光、雾气、曝光；.json 光影包按同一套字段加载。", 46)
-	bs.finish()
+	bh.note("读的是每个角色 Humanoid 的 Health / MaxHealth，只在本机画：不发包、不动数值；距离按你自己角色的位置量，死亡显示「已倒下」。", 34)
+	bh.finish()
 
 	--──────── 翻译 ────────
 	local bt = newBuilder(pageScroll("text"))
@@ -3441,6 +4197,7 @@ local function saveState()
 		uiFont = T.uiFont, textScale = T.textScale,
 		mode = T.mode, hold = T.hold, speed = T.speed, dim = T.dim, wall = T.wallAlpha,
 		wallBlur = T.wallBlur,
+		hpHud = T.hpHud, hpDist = T.hpDist, hpAlive = T.hpAlive, hpSort = T.hpSort, hpSize = T.hpSize,
 		aurora = T.aurora, dust = T.dust, blur = T.blur, followWindow = T.followWindow,
 		shade = Shade.profileKey, shadePower = T.shadePower,
 		music = Music.url, musicVolume = Music.volume, musicLoop = Music.loop,
@@ -3487,6 +4244,11 @@ local function loadState()
 	T.textScale = num(d.textScale, T.textScale)
 	T.wallBlur = num(d.wallBlur, T.wallBlur)
 	T.shadePower = num(d.shadePower, T.shadePower)
+	T.hpHud = bool(d.hpHud, T.hpHud)
+	T.hpDist = bool(d.hpDist, T.hpDist)
+	T.hpAlive = bool(d.hpAlive, T.hpAlive)
+	T.hpSort = bool(d.hpSort, T.hpSort)
+	T.hpSize = num(d.hpSize, T.hpSize)
 	if type(d.shade) == "string" and SHADES[d.shade] then Shade.profileKey = d.shade end
 	Music.volume = num(d.musicVolume, Music.volume)
 	Music.loop = bool(d.musicLoop, Music.loop)
@@ -3508,6 +4270,7 @@ end
 --=====================================================================
 local function boot()
 	loadState()
+	Shade.loadPacks()
 
 	for _, it in ipairs(CONFIG.backdrop.items or {}) do
 		if type(it) == "string" and it ~= "" then
@@ -3573,6 +4336,13 @@ local function boot()
 	end
 	startLive()
 
+	-- 血量 HUD：存档里开着就直接起
+	pcall(function()
+		HPHud.ensure()
+		HPHud.applyFont()
+		HPHud.setEnabled(T.hpHud)
+	end)
+
 	toast("无痕外观已就位 · F2 开合面板")
 end
 
@@ -3584,6 +4354,7 @@ local function destroy()
 	pcall(function() if Wall.gui then Wall.gui:Destroy() end end)
 	pcall(function() if Toast.gui then Toast.gui:Destroy() end end)
 	pcall(function() if Shade.filterGui then Shade.filterGui:Destroy() end end)
+	pcall(HPHud.destroy)
 	local blur = Lighting:FindFirstChild("SG_SceneBlur")
 	if blur then pcall(function() blur:Destroy() end) end
 	for _, layers in pairs(Reg.shadow) do
@@ -3598,7 +4369,7 @@ if getgenv and getgenv().SEAMLESS_DHC and getgenv().SEAMLESS_DHC.destroy then
 	pcall(getgenv().SEAMLESS_DHC.destroy)
 end
 
-print("[SG] Doors HardCore · 无痕玻璃 v7 启动（源：pastefy Bf6hbDY4）")
+print("[SG] Doors HardCore · 无痕玻璃 v8 启动（源：pastefy Bf6hbDY4）")
 
 local okBoot, errBoot = pcall(boot)
 if not okBoot then warn("[SG] 启动失败: " .. tostring(errBoot)) end
@@ -3608,6 +4379,7 @@ if getgenv then
 		destroy = destroy,
 		wall = Wall,
 		shade = Shade,
+		hp = HPHud,
 		state = T,
 		refresh = refresh,
 		save = saveState,
