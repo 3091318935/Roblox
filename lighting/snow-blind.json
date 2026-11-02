@@ -1,0 +1,29 @@
+{
+  "name": "雪盲",
+  "note": "极亮冷白，白天户外会发白，慎配白墙",
+  "lighting": {
+    "Brightness": 1.55,
+    "Ambient": [124, 132, 144],
+    "OutdoorAmbient": [118, 126, 140],
+    "ColorShift_Top": [242, 250, 255],
+    "ExposureCompensation": 0.28
+  },
+  "cc": {
+    "TintColor": [240, 248, 255],
+    "Contrast": 0.04,
+    "Saturation": -0.14,
+    "Brightness": 0.07
+  },
+  "bloom": {
+    "Intensity": 0.66,
+    "Size": 32,
+    "Threshold": 1.18
+  },
+  "atmosphere": {
+    "Density": 0.48,
+    "Haze": 2.8,
+    "Color": [236, 244, 252],
+    "Decay": [142, 154, 170],
+    "Glare": 0.1
+  }
+}
