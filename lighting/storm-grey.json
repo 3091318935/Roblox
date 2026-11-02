@@ -1,0 +1,30 @@
+{
+  "name": "铅灰暴雨",
+  "note": "低饱和 + 厚雾，压掉一切暖色",
+  "lighting": {
+    "Brightness": 0.78,
+    "Ambient": [56, 62, 70],
+    "OutdoorAmbient": [50, 58, 66],
+    "ColorShift_Top": [170, 184, 200],
+    "ColorShift_Bottom": [60, 66, 76],
+    "ExposureCompensation": -0.05
+  },
+  "cc": {
+    "TintColor": [192, 204, 214],
+    "Contrast": 0.22,
+    "Saturation": -0.22,
+    "Brightness": -0.03
+  },
+  "bloom": {
+    "Intensity": 0.26,
+    "Size": 20,
+    "Threshold": 1.3
+  },
+  "atmosphere": {
+    "Density": 0.58,
+    "Haze": 3.4,
+    "Color": [132, 144, 158],
+    "Decay": [66, 72, 84],
+    "Glare": 0
+  }
+}
