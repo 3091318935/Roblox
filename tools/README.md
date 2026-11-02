@@ -1,6 +1,6 @@
 # tools · 本地转换工具
 
-两个脚本，把「第三方 mp3 / mp4」变成 **Roblox 能直接用的东西**。
+三个脚本：前两个把「第三方 mp3 / mp4」变成 **Roblox 能直接用的东西**，第三个是改 Lua 之前的语法结构检查。
 它们只在你电脑上跑，不碰账号、不上传，输出文件由你自己传。
 
 需要 Python（DSH 自带一份就行）和 Pillow；视频那块还需要 ffmpeg：
@@ -48,6 +48,19 @@ python tools\audio_check.py song.mp3 --trim 45 --fade 1.5
 
 上传页：<https://create.roblox.com/dashboard/creations>（Development Items → Audio）
 文档：<https://create.roblox.com/docs/audio/assets>
+
+---
+
+## luacheck.mjs —— Lua 结构检查（改脚本前先跑）
+
+纯词法扫描，不联网、不执行代码，只查「块结构/括号有没有配对」——`end` 少了、`(` 没闭、字符串或长括号 `[[ ]]` 没结束、`for/while` 少 `do` 这类。
+
+```powershell
+node tools\luacheck.mjs DoorsHardCore-Seamless.lua
+# ✓ DoorsHardCore-Seamless.lua: 结构检查通过（33685 个 token，4389 行）
+```
+
+输出 `✓` 就代表词法层没问题；它会跳过注释、字符串、长括号里的内容，所以不会把引号里的 `end` 当关键字。
 
 ---
 
