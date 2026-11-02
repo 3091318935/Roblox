@@ -1,0 +1,34 @@
+{
+  "name": "极光夜",
+  "note": "深蓝底 + 青绿天光，适合夜景 / 恐怖图",
+  "lighting": {
+    "Brightness": 0.9,
+    "Ambient": [36, 46, 62],
+    "OutdoorAmbient": [30, 42, 58],
+    "ColorShift_Top": [140, 255, 220],
+    "ColorShift_Bottom": [40, 60, 90],
+    "ExposureCompensation": 0.05
+  },
+  "cc": {
+    "TintColor": [186, 244, 236],
+    "Contrast": 0.14,
+    "Saturation": 0.26,
+    "Brightness": 0.02
+  },
+  "bloom": {
+    "Intensity": 0.72,
+    "Size": 30,
+    "Threshold": 1.05
+  },
+  "sun": {
+    "Intensity": 0.12,
+    "Spread": 0.9
+  },
+  "atmosphere": {
+    "Density": 0.42,
+    "Haze": 2.4,
+    "Color": [64, 112, 132],
+    "Decay": [28, 54, 82],
+    "Glare": 0.14
+  }
+}
