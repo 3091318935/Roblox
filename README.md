@@ -1,4 +1,4 @@
-# Doors HardCore · 无痕玻璃 Seamless Glass（v7）
+# Doors HardCore · 无痕玻璃 Seamless Glass（v8）
 
 把 **Doors-HardCore**（源：`https://pastefy.app/Bf6hbDY4/raw`，备用 `Zero0Star/RipperNewSound` 的 raw）的界面，换成「无缝透明边框 + 壁纸 + 光影 + 中文 + 开场 BGM」的样子。
 
@@ -6,6 +6,25 @@
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/main/DoorsHardCore-Seamless.lua"))()
+```
+
+---
+
+## v8 改了什么
+
+| 需求 | 处理 |
+| --- | --- |
+| **光影要能「选」，不是一根根切** | 光影页改成清单：按 `还原 / 白天 / 傍晚·夜景 / 氛围 / 风格化` 分组，一行一套，点谁换谁，当前那行标「使用中」 |
+| **内置光影太少** | 11 套 → **25 套**（晨曦、正午、黄昏、雷雨、雪原、洞窟、血月、赛博、胶片、卡通、深海、太空、极光、复古…） |
+| **想自己下光影包导入** | 「我的光影包」：贴单个 `.json` 直链就导入并应用，自动存进 `SG_Shade.json`；行尾 × 删除 |
+| **想要一个下载页** | 页底 **光影下载页**（开仓库 `lighting/` 目录）+ **一键拉云端清单**（读 `lighting/index.json`，一次拉 6 套进清单）|
+| **全网有没有现成的 Roblox JSON 光影** | 没有 MC 那种 GLSL 包。能用的只有 Reshade 桌面端方案（`shaderblox1/roblox-shaders`）和光照参数框架（`fnstart/LightingFramework`），都进不了执行器。所以自建格式 + 自建仓库目录，见 [`lighting/README.md`](lighting/README.md) |
+| **全员血量实时数字** | 新增「血量」页：右上角浮层列出所有玩家，名字 + `87/100` + 血条，0.25s 刷新；死亡显示「已倒下」，血少转橙/红 |
+
+`tools/luacheck.mjs` 是新增的纯词法结构检查（不联网不执行），改完 Lua 先跑一遍：
+
+```powershell
+node tools\luacheck.mjs DoorsHardCore-Seamless.lua
 ```
 
 ---
@@ -69,7 +88,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/mai
 
 ---
 
-## 面板五页
+## 面板六页
 
 ### 外观
 
@@ -103,7 +122,24 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/mai
 
 ### 光影
 
-`bsl` / `complementary` / `seus` / `sildur` / `kuda` / `vanilla` / `night` / `cinema` / `moon` / `neon` / `gloom`（也认中文「冷月/霓虹/夜色/幽影/电影」）→ 内置风格；`.json` 链接 → 光影包；图片链接 → 滤色片。带 0~1.6 强度与「还原光影」。
+清单式，共 25 套内置（分组：还原 / 白天 / 傍晚·夜景 / 氛围 / 风格化）。点一行立即换，当前那行标「使用中」。
+
+- **一键拉云端清单** → 读 `lighting/index.json`，把仓库里那 6 套（极光夜 / 暮金 / 铅灰暴雨 / 雪盲 / 深蓝 / 暖胶）拉进「我的光影包」
+- **光影下载页** → 打开 `github.com/3091318935/Roblox/tree/main/lighting`，自己挑 raw 链接
+- 输入框贴 **单个包 raw 链接** → 导入并应用，存到 `SG_Shade.json`，下次开游戏还在
+- 输入框贴 **别人的 `index.json`**（同格式）→ 整份清单拉进来
+- 0~1.6 强度、**还原光影**、**光照文档**（官方 Lighting / 后处理参数表）
+
+包格式与自建流程见 [`lighting/README.md`](lighting/README.md)。一句话：`{ name, lighting{}, cc{}, bloom{}, dof{}, sun{}, atmosphere{}, filterImage{} }`，颜色写 `[r,g,b]` 或 `"#ffca9e"`，字段全可省。
+
+### 血量
+
+右上角 `SG_HP` 浮层，列全部玩家：
+
+- 名字（自己带 `你 · `）+ `87 / 100` 数字 + 3px 血条
+- 血条按比例上色：>60% 绿、30~60% 橙、<30% 红；`Humanoid.Health <= 0` 显示「已倒下」并置灰
+- 0.25s 轮询，只读 `Humanoid.Health / MaxHealth`，不写任何游戏状态
+- 页内开关：显示 / 距离 / 只看存活 / 按血量排序 / 字号滑杆 + 立即刷新
 
 ### 音乐
 
@@ -153,6 +189,7 @@ local CONFIG = {
                  wall = 0.80, frost = 0.7,
                  aurora = true, dust = false, blur = 8, followWindow = true },
     shade = { preset = "vanilla", power = 1 },
+    hud = { on = false, dist = true, aliveOnly = true, sortByHp = false, fontSize = 1 },
 }
 ```
 
@@ -172,12 +209,16 @@ local CONFIG = {
 
 **菜单没变化？** 「翻译」页点「重新扫描界面」，或调大 `waitTimeout`。
 
+**血量浮层不出来？** 「血量」页把「显示」打开；它是独立 ScreenGui（`SG_HP`，DisplayOrder 999997），被游戏自己 UI 挡住时改 `y` 偏移或缩小字号。
+
+**云端光影清单拉不到？** 说明仓库里还没有 `lighting/`——先跑一次 `发布.cmd`；离线就贴单包直链，或放本地 `file:///D:/DSH ROBLOX/lighting/xxx.json`。
+
 ---
 
 ## 边界
 
 - Roblox 没有 `backdrop-filter`，模糊的是 3D 场景；玻璃感来自场景模糊 + 半透明面板 + 高光。
-- MC 的 GLSL 光影包无法在 Roblox 运行，这里是观感映射。
+- MC 的 GLSL 光影包无法在 Roblox 运行；v8 起用自建 `seamless-shade-pack/1` 格式做观感映射（`lighting/`）。
 - 视频 / 音频必须是平台资产；直链只能缓存，不能直接播。
 - 中文走 CJK 回退字体，小字号会略糊。
 - hover 颜色可能短暂回弹（原脚本用 Tween 改色）。
@@ -191,4 +232,6 @@ $env:GITHUB_TOKEN = "ghp_xxx"     # 已有 gh 登录可省略
 powershell -ExecutionPolicy Bypass -File .\github\push.ps1
 ```
 
-改完重跑一次就是更新（按 `sha` 覆盖，含 `tools/`）。细节见 [github/PUBLISH.md](github/PUBLISH.md)。
+改完重跑一次就是更新（按 `sha` 覆盖，含 `tools/` 与 `lighting/`）。细节见 [github/PUBLISH.md](github/PUBLISH.md)。
+
+> `lighting/index.json` 里写的是 `raw.githubusercontent.com/.../main/lighting/xxx.json`，所以 **先推仓库，面板的「一键拉云端清单」才有东西可拉**。
