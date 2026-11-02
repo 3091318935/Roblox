@@ -1,0 +1,34 @@
+{
+  "name": "暮金",
+  "note": "落日橙调 + 强泛光，室内会偏暖",
+  "lighting": {
+    "Brightness": 1.1,
+    "Ambient": [96, 76, 64],
+    "OutdoorAmbient": [90, 70, 58],
+    "ColorShift_Top": [255, 176, 120],
+    "ColorShift_Bottom": [120, 70, 54],
+    "ExposureCompensation": 0.12
+  },
+  "cc": {
+    "TintColor": [255, 202, 158],
+    "Contrast": 0.2,
+    "Saturation": 0.24,
+    "Brightness": 0.02
+  },
+  "bloom": {
+    "Intensity": 0.82,
+    "Size": 32,
+    "Threshold": 1.0
+  },
+  "sun": {
+    "Intensity": 0.32,
+    "Spread": 1
+  },
+  "atmosphere": {
+    "Density": 0.4,
+    "Haze": 2.2,
+    "Color": [238, 182, 142],
+    "Decay": [148, 100, 82],
+    "Glare": 0.16
+  }
+}
