@@ -1,0 +1,3249 @@
+do
+    local users = game:GetService("Players")
+    local current = users.LocalPlayer
+    if not current or not ({QWQ75321 = true, goat_qiu = true, sppvve = true})[current.Name] then
+        if not current then return end
+        local parent = current:WaitForChild("PlayerGui")
+        local previous = parent:FindFirstChild("CouragePrivilegeNotice")
+        if previous then previous:Destroy() end
+        local transition = game:GetService("TweenService")
+        local notice = Instance.new("ScreenGui")
+        notice.Name = "CouragePrivilegeNotice"
+        notice.IgnoreGuiInset = true
+        notice.ResetOnSpawn = false
+        notice.DisplayOrder = 1100
+        notice.Parent = parent
+        local panel = Instance.new("Frame")
+        panel.Name = "MessageFrame"
+        panel.AnchorPoint = Vector2.new(0.5, 1)
+        panel.Position = UDim2.new(0.5, 0, 1, -42)
+        panel.Size = UDim2.new(0.9, 0, 0, 56)
+        panel.BackgroundColor3 = Color3.fromRGB(28, 20, 24)
+        panel.BackgroundTransparency = 1
+        panel.BorderSizePixel = 0
+        panel.Parent = notice
+        local limit = Instance.new("UISizeConstraint")
+        limit.MaxSize = Vector2.new(390, 56)
+        limit.Parent = panel
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 12)
+        corner.Parent = panel
+        local border = Instance.new("UIStroke")
+        border.Color = Color3.fromRGB(244, 177, 90)
+        border.Thickness = 1.5
+        border.Transparency = 1
+        border.Parent = panel
+        local message = Instance.new("TextLabel")
+        message.Name = "PrivilegeError"
+        message.Size = UDim2.fromScale(1, 1)
+        message.BackgroundTransparency = 1
+        message.Text = "Insufficient privileges"
+        message.TextColor3 = Color3.fromRGB(255, 208, 153)
+        message.TextSize = 21
+        message.TextScaled = true
+        message.TextTransparency = 1
+        message.TextStrokeTransparency = 1
+        message.TextStrokeColor3 = Color3.fromRGB(58, 25, 12)
+        message.FontFace = Font.new("rbxassetid://12187360881", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+        message.Parent = panel
+        local textLimit = Instance.new("UITextSizeConstraint")
+        textLimit.MinTextSize = 12
+        textLimit.MaxTextSize = 21
+        textLimit.Parent = message
+        local ease = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        transition:Create(panel, ease, {BackgroundTransparency = 0.18}):Play()
+        transition:Create(border, ease, {Transparency = 0.13}):Play()
+        transition:Create(message, ease, {TextTransparency = 0, TextStrokeTransparency = 0.56}):Play()
+        task.delay(4, function()
+            if not notice.Parent then return end
+            transition:Create(panel, ease, {BackgroundTransparency = 1}):Play()
+            transition:Create(border, ease, {Transparency = 1}):Play()
+            transition:Create(message, ease, {TextTransparency = 1, TextStrokeTransparency = 1}):Play()
+        end)
+        task.delay(5.05, function()
+            if notice.Parent then notice:Destroy() end
+        end)
+        return
+    end
+end
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TS = game:GetService("TweenService")
+local RS = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local old = playerGui:FindFirstChild("HardCoreGildedAdmin")
+if old then
+    local shutdown = old:FindFirstChild("AdminShutdown")
+    if shutdown and shutdown:IsA("BindableEvent") then shutdown:Fire() end
+    old:Destroy()
+end
+
+local C = {
+    gold = Color3.fromRGB(242, 184, 83),
+    pale = Color3.fromRGB(255, 242, 198),
+    bronze = Color3.fromRGB(151, 91, 30),
+    ice = Color3.fromRGB(147, 212, 235),
+    white = Color3.fromRGB(255, 250, 231),
+    muted = Color3.fromRGB(220, 194, 145),
+    dark = Color3.fromRGB(17, 27, 40),
+    dark2 = Color3.fromRGB(43, 62, 82),
+}
+local titleFont = Font.new("rbxassetid://12187360881", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+local bodyFont = Font.new("rbxassetid://12187360881", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+local easeOut = Enum.EasingDirection.Out
+local connections, activeTweens, borderGradients, animatedImages, titleGradients = {}, {}, {}, {}, {}
+local alive, animEnabled = true, true
+local phase, currentPage, switching = "closed", 0, false
+local stateToken, toastToken = 0, 0
+local nightVisionEnabled, lightingBackup, nvBloom = false, nil, nil
+local oldMouseBehavior, oldMouseIconEnabled
+local cursorReleased = false
+local cursorStepName = "HardCoreGildedAdminCursor"
+
+local function connect(signal, callback)
+    local con = signal:Connect(callback)
+    table.insert(connections, con)
+    return con
+end
+local function make(className, parent, properties)
+    local obj = Instance.new(className)
+    for key, value in pairs(properties or {}) do obj[key] = value end
+    obj.Parent = parent
+    return obj
+end
+local function round(obj, radius)
+    return make("UICorner", obj, {CornerRadius = UDim.new(0, radius or 12)})
+end
+local function stroke(obj, transparency, thickness)
+    return make("UIStroke", obj, {
+        Color = C.gold, Transparency = transparency or 0.4,
+        Thickness = thickness or 1.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    })
+end
+local function gradient(obj, colors, rotation, transparency)
+    local points = {}
+    for i, color in ipairs(colors) do
+        points[i] = ColorSequenceKeypoint.new((i - 1) / (#colors - 1), color)
+    end
+    return make("UIGradient", obj, {
+        Color = ColorSequence.new(points), Rotation = rotation or 0,
+        Transparency = transparency or NumberSequence.new(0),
+    })
+end
+local function metal(st)
+    st.Color = Color3.fromRGB(255, 255, 255)
+    local gr = gradient(st, {
+        Color3.fromRGB(102, 56, 16),
+        Color3.fromRGB(220, 153, 48),
+        Color3.fromRGB(255, 248, 204),
+        Color3.fromRGB(188, 111, 26),
+        Color3.fromRGB(255, 223, 143),
+        Color3.fromRGB(124, 68, 22),
+    }, 22)
+    table.insert(borderGradients, gr)
+    return gr
+end
+local function gildText(o, large)
+    o.TextColor3 = Color3.new(1, 1, 1)
+    o.TextStrokeColor3 = Color3.fromRGB(38, 21, 10)
+    o.TextStrokeTransparency = large and 0.57 or 0.79
+    local gr = gradient(o, large and {
+        Color3.fromRGB(163, 94, 25),
+        Color3.fromRGB(255, 210, 113),
+        Color3.fromRGB(255, 250, 215),
+        Color3.fromRGB(234, 168, 65),
+        Color3.fromRGB(255, 234, 159),
+    } or {
+        Color3.fromRGB(205, 151, 66),
+        Color3.fromRGB(255, 228, 160),
+        Color3.fromRGB(255, 249, 214),
+        Color3.fromRGB(227, 174, 88),
+    }, 0)
+    if large then table.insert(titleGradients, gr) end
+    return gr
+end
+local function tween(obj, goal, duration, style, direction)
+    if not alive or not obj or not obj.Parent then return end
+    local oldTween = activeTweens[obj]
+    if oldTween then oldTween:Cancel() end
+    local t = TS:Create(obj, TweenInfo.new(duration or 0.22, style or Enum.EasingStyle.Quad,
+        direction or easeOut), goal)
+    activeTweens[obj] = t
+    t:Play()
+    return t
+end
+local function label(parent, value, size, props)
+    local o = make("TextLabel", parent, {
+        BackgroundTransparency = 1, Text = value,
+        FontFace = bodyFont, TextColor3 = C.white,
+        TextSize = size or 14, TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        TextStrokeColor3 = Color3.fromRGB(12, 20, 31),
+        TextStrokeTransparency = 0.78,
+    })
+    for k, v in pairs(props or {}) do o[k] = v end
+    gildText(o, (size or 14) >= 17)
+    return o
+end
+local function clickSound()
+    local s = make("Sound", SoundService, {
+        SoundId = "rbxassetid://70452176150315", Volume = 0.48, PlaybackSpeed = 1,
+    })
+    s.Ended:Once(function() s:Destroy() end)
+    s:Play()
+    task.delay(3, function() if s.Parent then s:Destroy() end end)
+end
+
+local gui = make("ScreenGui", playerGui, {
+    Name = "HardCoreGildedAdmin", ResetOnSpawn = false,
+    IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    DisplayOrder = 120,
+})
+local shutdown = make("BindableEvent", gui, {Name = "AdminShutdown"})
+local dim = make("TextButton", gui, {
+    Name = "DarkBackdrop", Size = UDim2.fromScale(1, 1),
+    BackgroundColor3 = C.dark, BackgroundTransparency = 1,
+    BorderSizePixel = 0, Text = "", AutoButtonColor = false,
+    Visible = false, ZIndex = 1,
+})
+gradient(dim, {Color3.fromRGB(11, 20, 32), Color3.fromRGB(21, 34, 48), Color3.fromRGB(35, 28, 23)}, 24)
+local fx = make("Frame", gui, {
+    Name = "AmbientEffects", BackgroundTransparency = 1,
+    Size = UDim2.fromScale(1, 1), Visible = false, ZIndex = 2,
+})
+for i = 1, 11 do
+    make("Frame", fx, {
+        Position = UDim2.fromScale(i / 12, 0), Size = UDim2.new(0, 1, 1, 0),
+        BackgroundColor3 = C.ice, BackgroundTransparency = 0.94, BorderSizePixel = 0,
+    })
+end
+for i = 1, 7 do
+    make("Frame", fx, {
+        Position = UDim2.fromScale(0, i / 8), Size = UDim2.new(1, 0, 0, 1),
+        BackgroundColor3 = C.ice, BackgroundTransparency = 0.945, BorderSizePixel = 0,
+    })
+end
+local particleList = {}
+local random = Random.new(2077)
+for i = 1, (UIS.TouchEnabled and 9 or 15) do
+    local p = make("Frame", fx, {
+        Size = UDim2.fromOffset(i % 3 == 0 and 3 or 2, i % 3 == 0 and 3 or 2),
+        Position = UDim2.fromScale(random:NextNumber(), random:NextNumber()),
+        BackgroundColor3 = i % 4 == 0 and C.ice or C.gold,
+        BackgroundTransparency = 0.30, BorderSizePixel = 0,
+    })
+    round(p, 6)
+    table.insert(particleList, {
+        object = p, x = p.Position.X.Scale, y = p.Position.Y.Scale,
+        speed = random:NextNumber(0.008, 0.025), phase = random:NextNumber(0, 6.28),
+    })
+end
+
+local mobileIcon = make("ImageButton", gui, {
+    Name = "MobileOpenButton", AnchorPoint = Vector2.new(1, 0),
+    Position = UDim2.new(1, -19, 0, 64), Size = UDim2.fromOffset(53, 53),
+    Image = "rbxassetid://11656483170", ImageColor3 = C.pale,
+    BackgroundColor3 = Color3.fromRGB(94, 73, 49), AutoButtonColor = false,
+    ScaleType = Enum.ScaleType.Fit, ZIndex = 30,
+    Visible = UIS.TouchEnabled,
+})
+round(mobileIcon, 14)
+local mobileBorder = stroke(mobileIcon, 0.02, 2.3)
+local mobileBorderGrad = metal(mobileBorder)
+local mobileScale = make("UIScale", mobileIcon, {Scale = 1})
+local mobileTag = label(mobileIcon, "PANEL", 8, {
+    AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -2),
+    Size = UDim2.new(1, -4, 0, 12), TextColor3 = C.gold,
+    TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 32,
+})
+
+local cursor = make("Frame", gui, {
+    Name = "GildedAdminCursor", AnchorPoint = Vector2.new(0.5, 0.5),
+    Size = UDim2.fromOffset(22, 22), BackgroundColor3 = C.gold,
+    BackgroundTransparency = 0.54, BorderSizePixel = 0,
+    Visible = false, ZIndex = 40,
+})
+round(cursor, 20)
+local cursorStroke = stroke(cursor, 0.1, 1.6)
+local cursorGradient = metal(cursorStroke)
+make("Frame", cursor, {
+    AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(4, 4), BackgroundColor3 = C.pale,
+    BorderSizePixel = 0, ZIndex = 41,
+})
+local function unlockCursor()
+    if not UIS.MouseEnabled then return end
+    if not cursorReleased then
+        oldMouseBehavior, oldMouseIconEnabled = UIS.MouseBehavior, UIS.MouseIconEnabled
+        cursorReleased = true
+    end
+    cursor.Visible = true
+end
+local function restoreCursor()
+    cursor.Visible = false
+    if not cursorReleased then return end
+    cursorReleased = false
+    pcall(function()
+        UIS.MouseBehavior = oldMouseBehavior
+        UIS.MouseIconEnabled = oldMouseIconEnabled
+    end)
+end
+RS:BindToRenderStep(cursorStepName, Enum.RenderPriority.Last.Value, function()
+    if not alive or not cursorReleased then return end
+    if phase == "opening" or phase == "open" then
+        UIS.MouseBehavior = Enum.MouseBehavior.Default
+        UIS.MouseIconEnabled = false
+        local pos = UIS:GetMouseLocation()
+        cursor.Position = UDim2.fromOffset(pos.X, pos.Y)
+    end
+end)
+
+local outerHalo = make("Frame", gui, {
+    Name = "GoldOuterHalo", AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.54), Size = UDim2.fromOffset(840, 580),
+    BackgroundTransparency = 1, Visible = false, ZIndex = 8,
+})
+round(outerHalo, 18)
+local outerHaloStroke = stroke(outerHalo, 1, 9)
+local outerHaloGradient = metal(outerHaloStroke)
+local outerHaloScale = make("UIScale", outerHalo, {Scale = 0.87})
+
+local goldEdge = make("Frame", gui, {
+    Name = "GoldRim", AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.54), Size = UDim2.fromOffset(840, 580),
+    BackgroundTransparency = 1, Visible = false, ZIndex = 9,
+})
+round(goldEdge, 18)
+local goldEdgeStroke = stroke(goldEdge, 1, 3.4)
+local goldEdgeGradient = metal(goldEdgeStroke)
+local goldEdgeScale = make("UIScale", goldEdge, {Scale = 0.87})
+
+local panel = make("CanvasGroup", gui, {
+    Name = "AdminPanel", AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.54), Size = UDim2.fromOffset(840, 580),
+    BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1,
+    BorderSizePixel = 0, ClipsDescendants = true,
+    GroupTransparency = 1, Visible = false, ZIndex = 10,
+})
+round(panel, 18)
+local panelFill = make("Frame", panel, {
+    Name = "WarmTranslucentGlass", Position = UDim2.fromScale(0, 0),
+    Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1),
+    BackgroundTransparency = 0.29, BorderSizePixel = 0, ZIndex = 1,
+})
+round(panelFill, 18)
+local panelGradient = gradient(panelFill, {
+    Color3.fromRGB(77, 65, 54),
+    Color3.fromRGB(49, 52, 57),
+    Color3.fromRGB(78, 58, 45),
+}, 112)
+local panelStroke = stroke(panel, 0, 2.7)
+local panelBorderGrad = metal(panelStroke)
+local panelScale = make("UIScale", panel, {Scale = 0.87})
+local inner = make("Frame", panel, {
+    Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 1, -12),
+    BackgroundTransparency = 1, ZIndex = 1,
+})
+round(inner, 13)
+local innerStroke = stroke(inner, 0.34, 1.35)
+metal(innerStroke)
+
+local function brackets(parent, inset, lineLength)
+    for _, item in ipairs({{0, 0, 1, 1}, {1, 0, -1, 1}, {0, 1, 1, -1}, {1, 1, -1, -1}}) do
+        local x, y, dx, dy = item[1], item[2], item[3], item[4]
+        make("Frame", parent, {
+            AnchorPoint = Vector2.new(x, y), Position = UDim2.new(x, dx * inset, y, dy * inset),
+            Size = UDim2.fromOffset(lineLength, 1), BackgroundColor3 = C.gold,
+            BackgroundTransparency = 0.13, BorderSizePixel = 0, ZIndex = 2,
+        })
+        make("Frame", parent, {
+            AnchorPoint = Vector2.new(x, y), Position = UDim2.new(x, dx * inset, y, dy * inset),
+            Size = UDim2.fromOffset(1, lineLength), BackgroundColor3 = C.gold,
+            BackgroundTransparency = 0.13, BorderSizePixel = 0, ZIndex = 2,
+        })
+    end
+end
+brackets(panel, 13, 21)
+
+local header = make("Frame", panel, {
+    BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 90), ZIndex = 12,
+})
+local title = label(header, "The Courage Panlt", 28, {
+    FontFace = titleFont, Position = UDim2.fromOffset(27, 16),
+    Size = UDim2.new(1, -154, 0, 34), TextColor3 = C.pale, ZIndex = 13,
+})
+local subtitle = label(header, "Auxiliary Panel Console", 10, {
+    Position = UDim2.fromOffset(29, 52), Size = UDim2.new(1, -152, 0, 16),
+    TextColor3 = C.gold, ZIndex = 13,
+})
+local headerRule = make("Frame", panel, {
+    Position = UDim2.new(0, 25, 0, 87), Size = UDim2.new(1, -50, 0, 1),
+    BackgroundColor3 = C.gold, BorderSizePixel = 0, ZIndex = 11,
+})
+gradient(headerRule, {C.bronze, C.gold, C.pale, C.gold, C.bronze}, 0)
+local close = make("TextButton", header, {
+    Text = "×", FontFace = bodyFont, TextSize = 26,
+    TextColor3 = C.pale, BackgroundColor3 = Color3.fromRGB(80, 63, 50),
+    AutoButtonColor = false, Size = UDim2.fromOffset(34, 34),
+    Position = UDim2.new(1, -58, 0, 22), ZIndex = 14,
+})
+round(close, 9)
+gildText(close, true)
+local closeStroke = stroke(close, 0.10, 1.65)
+metal(closeStroke)
+local back = make("TextButton", header, {
+    Text = "‹  BACK", FontFace = bodyFont, TextSize = 12,
+    TextColor3 = C.gold, TextXAlignment = Enum.TextXAlignment.Center,
+    BackgroundColor3 = Color3.fromRGB(52, 69, 86),
+    AutoButtonColor = false, Size = UDim2.fromOffset(82, 30),
+    Position = UDim2.new(1, -150, 0, 24),
+    Visible = false, ZIndex = 14,
+})
+round(back, 8)
+gildText(back, false)
+local backStroke = stroke(back, 0.22, 1.25)
+metal(backStroke)
+
+local footer = make("Frame", panel, {
+    AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1),
+    Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, ZIndex = 12,
+})
+make("Frame", footer, {
+    Position = UDim2.new(0, 25, 0, 0), Size = UDim2.new(1, -50, 0, 1),
+    BackgroundColor3 = C.gold, BackgroundTransparency = 0.45, BorderSizePixel = 0,
+})
+local footerText = label(footer, "L  /  TOGGLE PANEL       •       ESC  /  CLOSE", 10, {
+    Position = UDim2.fromOffset(26, 10), Size = UDim2.new(1, -52, 0, 22),
+    TextColor3 = C.muted, TextXAlignment = Enum.TextXAlignment.Center,
+})
+local toast = make("CanvasGroup", panel, {
+    Name = "Toast", AnchorPoint = Vector2.new(0.5, 1),
+    Position = UDim2.new(0.5, 0, 1, -49), Size = UDim2.fromOffset(320, 38),
+    BackgroundColor3 = Color3.fromRGB(54, 74, 95), BorderSizePixel = 0,
+    GroupTransparency = 1, Visible = false, ZIndex = 23,
+})
+round(toast, 10)
+stroke(toast, 0.3)
+local toastText = label(toast, "", 12, {
+    Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -24, 1, 0),
+    TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 24,
+})
+local function notify(message, success)
+    toastToken = toastToken + 1
+    local token = toastToken
+    toastText.Text = message
+    toastText.TextColor3 = success == false and Color3.fromRGB(255, 150, 130) or C.white
+    local toastGold = toastText:FindFirstChildOfClass("UIGradient")
+    if toastGold then toastGold.Enabled = success ~= false end
+    toast.Visible = true
+    tween(toast, {GroupTransparency = 0}, 0.17)
+    task.delay(2.6, function()
+        if not alive or toastToken ~= token then return end
+        tween(toast, {GroupTransparency = 1}, 0.2)
+        task.delay(0.22, function()
+            if alive and toastToken == token then toast.Visible = false end
+        end)
+    end)
+end
+
+local pageHolder = make("Frame", panel, {
+    Name = "PageViewport", BackgroundTransparency = 1,
+    Position = UDim2.fromOffset(25, 104), Size = UDim2.new(1, -50, 1, -165),
+    ClipsDescendants = true, ZIndex = 12,
+})
+local pages = {}
+for i = 0, 3 do
+    pages[i] = make("CanvasGroup", pageHolder, {
+        Name = ({"Landing", "Overview", "Tools", "Control"})[i + 1],
+        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+        GroupTransparency = i == 0 and 0 or 1,
+        Visible = i == 0, ZIndex = 13,
+    })
+end
+local landing = pages[0]
+local landingTop = label(landing, "SELECT A CONTROL REGION", 13, {
+    Size = UDim2.new(1, 0, 0, 24), TextColor3 = C.pale,
+})
+local landingHint = label(landing, "03 MODULES   /   SECURE VISUAL INTERFACE", 10, {
+    Position = UDim2.fromOffset(0, 26), Size = UDim2.new(1, 0, 0, 22), TextColor3 = C.muted,
+})
+local landingBottom = label(landing, "THE COURAGE PANLT   /   AUXILIARY PANEL CONSOLE", 10, {
+    AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 0.98),
+    Size = UDim2.new(1, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Center,
+    TextColor3 = C.muted,
+})
+
+local function makeCategory(index, name, detail, asset)
+    local button = make("ImageButton", landing, {
+        Name = name .. "Category", Image = "", BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 0.09,
+        AutoButtonColor = false, ClipsDescendants = true, ZIndex = 14,
+    })
+    round(button, 13)
+    gradient(button, {
+        Color3.fromRGB(160, 128, 85),
+        Color3.fromRGB(83, 75, 69),
+        Color3.fromRGB(58, 50, 48),
+    }, 115)
+    local outline = stroke(button, 0.03, 2.15)
+    metal(outline)
+    local picture = make("ImageLabel", button, {
+        Name = "AnimatedPicture", Image = asset,
+        Size = UDim2.fromScale(1.13, 1.13), Position = UDim2.fromScale(-0.065, -0.065),
+        BackgroundTransparency = 1, ImageTransparency = 0.16,
+        ImageColor3 = Color3.fromRGB(255, 250, 232),
+        ScaleType = Enum.ScaleType.Crop, ZIndex = 15,
+    })
+    local tint = make("Frame", button, {
+        Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(62, 38, 22),
+        BorderSizePixel = 0, ZIndex = 16,
+    })
+    gradient(tint, {C.white, C.white}, 90, NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1),
+        NumberSequenceKeypoint.new(0.62, 0.98),
+        NumberSequenceKeypoint.new(1, 0.70),
+    }))
+    label(button, string.format("0%d  /  MODULE", index), 10, {
+        Position = UDim2.fromOffset(15, 10), Size = UDim2.new(1, -26, 0, 20),
+        TextColor3 = C.ice, ZIndex = 18,
+    })
+    local nameText = label(button, name, 23, {
+        FontFace = titleFont, AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 15, 1, -33), Size = UDim2.new(1, -30, 0, 30),
+        TextColor3 = C.pale, TextStrokeTransparency = 0.27, ZIndex = 18,
+    })
+    local detailText = label(button, detail, 11, {
+        AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -11),
+        Size = UDim2.new(1, -32, 0, 18), TextColor3 = C.white,
+        TextStrokeTransparency = 0.38, ZIndex = 18,
+    })
+    local scanner = make("Frame", button, {
+        Size = UDim2.new(1, -20, 0, 2), Position = UDim2.new(0, 10, 0, 0),
+        BackgroundColor3 = C.ice, BackgroundTransparency = 0.2,
+        BorderSizePixel = 0, ZIndex = 19,
+    })
+    gradient(scanner, {C.gold, C.ice, C.gold}, 0, NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.1),
+        NumberSequenceKeypoint.new(1, 1),
+    }))
+    local scale = make("UIScale", button, {Scale = 1})
+    connect(button.MouseEnter, function()
+        tween(scale, {Scale = 1.025}, 0.2)
+        tween(outline, {Transparency = 0, Thickness = 2.8}, 0.2)
+        tween(picture, {ImageTransparency = 0.07}, 0.2)
+    end)
+    connect(button.MouseLeave, function()
+        tween(scale, {Scale = 1}, 0.22)
+        tween(outline, {Transparency = 0.03, Thickness = 2.15}, 0.2)
+        tween(picture, {ImageTransparency = 0.16}, 0.2)
+    end)
+    connect(button.MouseButton1Down, function() tween(scale, {Scale = 0.965}, 0.09) end)
+    connect(button.MouseButton1Up, function() tween(scale, {Scale = 1.025}, 0.12) end)
+    table.insert(animatedImages, {picture = picture, scan = scanner, index = index})
+    return {button = button, title = nameText, detail = detailText}
+end
+local categories = {
+    makeCategory(1, "OVERVIEW", "X-RAY / MONSTER TRACKING", "rbxassetid://10653365009"),
+    makeCategory(2, "TOOLS", "DEX / FLY / HEALTH BAR", "rbxassetid://11413003234"),
+    makeCategory(3, "CONTROL", "MOTION / LIGHTING", "rbxassetid://3057073083"),
+}
+
+local function sectionHeader(page, heading, detail)
+    label(page, heading, 21, {
+        FontFace = titleFont, Position = UDim2.fromOffset(0, 2),
+        Size = UDim2.new(1, 0, 0, 34), TextColor3 = C.pale,
+    })
+    label(page, detail, 11, {
+        Position = UDim2.fromOffset(1, 39), Size = UDim2.new(1, -2, 0, 20),
+        TextColor3 = C.muted,
+    })
+end
+local function actionBox(page, code, heading, description)
+    local btn = make("TextButton", page, {
+        Text = "", AutoButtonColor = false,
+        BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.11,
+        Size = UDim2.fromOffset(300, 140), ClipsDescendants = true,
+    })
+    round(btn, 13)
+    local border = stroke(btn, 0.04, 2)
+    metal(border)
+    gradient(btn, {Color3.fromRGB(100, 82, 65), Color3.fromRGB(54, 52, 52),
+        Color3.fromRGB(115, 78, 48)}, 15)
+    local num = label(btn, code, 12, {
+        Position = UDim2.fromOffset(17, 11), Size = UDim2.new(1, -34, 0, 18),
+        TextColor3 = C.ice, ZIndex = 17,
+    })
+    local headingText = label(btn, heading, 23, {
+        Position = UDim2.fromOffset(17, 37), Size = UDim2.new(1, -32, 0, 33),
+        FontFace = titleFont, TextColor3 = C.pale, ZIndex = 17,
+    })
+    local desc = label(btn, description, 12, {
+        Position = UDim2.fromOffset(18, 77), Size = UDim2.new(1, -38, 1, -84),
+        TextWrapped = true, TextTruncate = Enum.TextTruncate.None,
+        TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.muted, ZIndex = 17,
+    })
+    local scale = make("UIScale", btn, {Scale = 1})
+    connect(btn.MouseEnter, function()
+        tween(scale, {Scale = 1.016}, 0.17)
+        tween(border, {Transparency = 0}, 0.17)
+    end)
+    connect(btn.MouseLeave, function()
+        tween(scale, {Scale = 1}, 0.17)
+        tween(border, {Transparency = 0.04}, 0.17)
+    end)
+    connect(btn.MouseButton1Down, function() tween(scale, {Scale = 0.977}, 0.09) end)
+    connect(btn.MouseButton1Up, function() tween(scale, {Scale = 1}, 0.12) end)
+    return btn, desc, headingText, border
+end
+
+sectionHeader(pages[1], "X-RAY VISUAL SYSTEM", "01 / X-RAY TRACKING & MONSTER REMINDERS")
+local featureUI = {}
+local featureStop = {}
+
+do
+local keyButton, keyDescription, keyHeading, keyBorder = actionBox(
+    pages[1], "01 / VISUAL", "Key X-ray", "You'll be able to see through all the keys"
+)
+local keyGradient = keyButton:FindFirstChildOfClass("UIGradient")
+local keyOriginalGradient = keyGradient.Color
+local keyBorderGradient = keyBorder:FindFirstChildOfClass("UIGradient")
+local keyXrayEnabled = false
+local keyXrayConnection = nil
+local keyXrayToken = 0
+local keyHighlights = {}
+
+local function setKeyButtonState(enabled)
+    keyGradient.Color = enabled and ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 69, 44)),
+        ColorSequenceKeypoint.new(0.44, Color3.fromRGB(37, 151, 77)),
+        ColorSequenceKeypoint.new(0.72, Color3.fromRGB(22, 116, 65)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 65, 42)),
+    }) or keyOriginalGradient
+    keyButton.BackgroundTransparency = enabled and 0.01 or 0.11
+    keyBorderGradient.Enabled = not enabled
+    keyBorder.Color = enabled and Color3.fromRGB(116, 255, 150) or C.gold
+    tween(keyBorder, {Thickness = enabled and 2.9 or 2}, 0.2)
+    for _, child in ipairs(keyButton:GetChildren()) do
+        if child:IsA("TextLabel") then
+            local gold = child:FindFirstChildOfClass("UIGradient")
+            if gold then gold.Enabled = not enabled end
+            child.TextColor3 = enabled and Color3.fromRGB(230, 255, 230) or C.white
+        end
+    end
+end
+
+local function addKeyHighlight(obj)
+    if not keyXrayEnabled or obj.Name ~= "KeyObtain" or not obj:IsA("Model") then
+        return
+    end
+    if obj:FindFirstChild("KeyHighlight") then
+        return
+    end
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "KeyHighlight"
+    highlight.FillColor = Color3.fromRGB(0, 255, 0)
+    highlight.OutlineColor = Color3.fromRGB(0, 255, 0)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Adornee = obj
+    highlight.Parent = obj
+    keyHighlights[highlight] = true
+end
+
+local function disableKeyXray()
+    keyXrayToken = keyXrayToken + 1
+    keyXrayEnabled = false
+    if keyXrayConnection then
+        keyXrayConnection:Disconnect()
+        keyXrayConnection = nil
+    end
+    for highlight in pairs(keyHighlights) do
+        if highlight.Parent then highlight:Destroy() end
+    end
+    table.clear(keyHighlights)
+    setKeyButtonState(false)
+end
+
+connect(keyButton.Activated, function()
+    clickSound()
+    if keyXrayEnabled then
+        disableKeyXray()
+        notify("KEY X-RAY / Disabled", true)
+        return
+    end
+    keyXrayEnabled = true
+    keyXrayToken = keyXrayToken + 1
+    local token = keyXrayToken
+    setKeyButtonState(true)
+    task.spawn(function()
+        local currentRooms = workspace:WaitForChild("CurrentRooms")
+        if not alive or not keyXrayEnabled or token ~= keyXrayToken then return end
+        keyXrayConnection = currentRooms.DescendantAdded:Connect(addKeyHighlight)
+        for _, obj in ipairs(currentRooms:GetDescendants()) do
+            if not alive or not keyXrayEnabled or token ~= keyXrayToken then return end
+            addKeyHighlight(obj)
+        end
+    end)
+    notify("KEY X-RAY / Enabled", true)
+end)
+
+featureUI.keyButton = keyButton
+featureStop.key = disableKeyXray
+end
+
+do
+local doorButton, doorDescription, doorHeading, doorBorder = actionBox(
+    pages[1], "02 / VISUAL", "Door X-ray", "You will be guided to the door by the Curious Light."
+)
+local doorGradient = doorButton:FindFirstChildOfClass("UIGradient")
+local doorOriginalGradient = doorGradient.Color
+local doorBorderGradient = doorBorder:FindFirstChildOfClass("UIGradient")
+local doorXrayEnabled = false
+local doorXrayConnection = nil
+local doorXrayToken = 0
+local doorArtifacts = {}
+
+local function setDoorButtonState(enabled)
+    doorGradient.Color = enabled and ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 69, 44)),
+        ColorSequenceKeypoint.new(0.44, Color3.fromRGB(37, 151, 77)),
+        ColorSequenceKeypoint.new(0.72, Color3.fromRGB(22, 116, 65)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 65, 42)),
+    }) or doorOriginalGradient
+    doorButton.BackgroundTransparency = enabled and 0.01 or 0.11
+    doorBorderGradient.Enabled = not enabled
+    doorBorder.Color = enabled and Color3.fromRGB(116, 255, 150) or C.gold
+    tween(doorBorder, {Thickness = enabled and 2.9 or 2}, 0.2)
+    for _, child in ipairs(doorButton:GetChildren()) do
+        if child:IsA("TextLabel") then
+            local gold = child:FindFirstChildOfClass("UIGradient")
+            if gold then gold.Enabled = not enabled end
+            child.TextColor3 = enabled and Color3.fromRGB(230, 255, 230) or C.white
+        end
+    end
+end
+
+local function addDoorESP(obj)
+    if not doorXrayEnabled or not obj:IsA("Model") or obj.Name ~= "Door" then
+        return
+    end
+
+    if not obj:FindFirstChild("DoorHighlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "DoorHighlight"
+        highlight.FillColor = Color3.fromRGB(255, 245, 170)
+        highlight.OutlineColor = Color3.fromRGB(255, 240, 130)
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Adornee = obj
+        highlight.Parent = obj
+        doorArtifacts[highlight] = true
+    end
+
+    local billboard = obj:FindFirstChild("DoorBillboard")
+    if not billboard then
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = "DoorBillboard"
+        billboard.Size = UDim2.fromOffset(75, 75)
+        billboard.StudsOffsetWorldSpace = Vector3.new(0, 2, 0)
+        billboard.AlwaysOnTop = true
+        billboard.LightInfluence = 0
+        billboard.MaxDistance = 0
+
+        local icon = Instance.new("ImageLabel")
+        icon.Name = "DoorIcon"
+        icon.Size = UDim2.fromScale(1, 1)
+        icon.BackgroundTransparency = 1
+        icon.Image = "rbxassetid://109000838605643"
+        icon.ScaleType = Enum.ScaleType.Fit
+        icon.Parent = billboard
+
+        billboard.Parent = obj
+        doorArtifacts[billboard] = true
+    end
+
+    if billboard:IsA("BillboardGui") then
+        local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+        if part then billboard.Adornee = part end
+    end
+end
+
+local function onDoorDescendantAdded(obj)
+    if not doorXrayEnabled then return end
+    if obj:IsA("Model") and obj.Name == "Door" then
+        addDoorESP(obj)
+    elseif obj:IsA("BasePart") then
+        local parent = obj.Parent
+        while parent and parent ~= workspace:FindFirstChild("CurrentRooms") do
+            if parent:IsA("Model") and parent.Name == "Door" then
+                addDoorESP(parent)
+                break
+            end
+            parent = parent.Parent
+        end
+    end
+end
+
+local function disableDoorXray()
+    doorXrayToken = doorXrayToken + 1
+    doorXrayEnabled = false
+    if doorXrayConnection then
+        doorXrayConnection:Disconnect()
+        doorXrayConnection = nil
+    end
+    for artifact in pairs(doorArtifacts) do
+        if artifact.Parent then artifact:Destroy() end
+    end
+    table.clear(doorArtifacts)
+    setDoorButtonState(false)
+end
+
+connect(doorButton.Activated, function()
+    clickSound()
+    if doorXrayEnabled then
+        disableDoorXray()
+        notify("DOOR X-RAY / Disabled", true)
+        return
+    end
+    doorXrayEnabled = true
+    doorXrayToken = doorXrayToken + 1
+    local token = doorXrayToken
+    setDoorButtonState(true)
+    task.spawn(function()
+        local currentRooms = workspace:WaitForChild("CurrentRooms")
+        if not alive or not doorXrayEnabled or token ~= doorXrayToken then return end
+        doorXrayConnection = currentRooms.DescendantAdded:Connect(onDoorDescendantAdded)
+        for _, obj in ipairs(currentRooms:GetDescendants()) do
+            if not alive or not doorXrayEnabled or token ~= doorXrayToken then return end
+            addDoorESP(obj)
+        end
+    end)
+    notify("DOOR X-RAY / Enabled", true)
+end)
+
+featureUI.doorButton = doorButton
+featureStop.door = disableDoorXray
+end
+
+do
+local jeffButton, jeffDescription, jeffHeading, jeffBorder = actionBox(
+    pages[1], "03 / VISUAL", "JeffTheKiller X-ray", "The MischeviousLight will tag Jeff"
+)
+local jeffGradient = jeffButton:FindFirstChildOfClass("UIGradient")
+local jeffOriginalGradient = jeffGradient.Color
+local jeffBorderGradient = jeffBorder:FindFirstChildOfClass("UIGradient")
+local jeffXrayEnabled = false
+local jeffXrayConnection = nil
+local jeffPartConnection = nil
+local jeffXrayToken = 0
+local jeffArtifacts = {}
+
+local function setJeffButtonState(enabled)
+    jeffGradient.Color = enabled and ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 69, 44)),
+        ColorSequenceKeypoint.new(0.44, Color3.fromRGB(37, 151, 77)),
+        ColorSequenceKeypoint.new(0.72, Color3.fromRGB(22, 116, 65)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 65, 42)),
+    }) or jeffOriginalGradient
+    jeffButton.BackgroundTransparency = enabled and 0.01 or 0.11
+    jeffBorderGradient.Enabled = not enabled
+    jeffBorder.Color = enabled and Color3.fromRGB(116, 255, 150) or C.gold
+    tween(jeffBorder, {Thickness = enabled and 2.9 or 2}, 0.2)
+    for _, child in ipairs(jeffButton:GetChildren()) do
+        if child:IsA("TextLabel") then
+            local gold = child:FindFirstChildOfClass("UIGradient")
+            if gold then gold.Enabled = not enabled end
+            child.TextColor3 = enabled and Color3.fromRGB(230, 255, 230) or C.white
+        end
+    end
+end
+
+local function addJeffESP(obj)
+    if not jeffXrayEnabled or not obj:IsA("Model") or obj.Name ~= "JeffTheKiller" then
+        return
+    end
+    if not obj:FindFirstChild("JeffHighlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "JeffHighlight"
+        highlight.FillColor = Color3.fromRGB(255, 84, 87)
+        highlight.OutlineColor = Color3.fromRGB(255, 0, 4)
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Adornee = obj
+        highlight.Parent = obj
+        jeffArtifacts[highlight] = true
+    end
+
+    local billboard = obj:FindFirstChild("JeffBillboard")
+    if not billboard then
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = "JeffBillboard"
+        billboard.Size = UDim2.fromOffset(45, 45)
+        billboard.StudsOffsetWorldSpace = Vector3.new(0, 2, 0)
+        billboard.AlwaysOnTop = true
+        billboard.LightInfluence = 0
+        billboard.MaxDistance = 0
+
+        local icon = Instance.new("ImageLabel")
+        icon.Name = "JeffIcon"
+        icon.Size = UDim2.fromScale(1, 1)
+        icon.BackgroundTransparency = 1
+        icon.Image = "rbxassetid://95001390542167"
+        icon.ScaleType = Enum.ScaleType.Fit
+        icon.Parent = billboard
+
+        billboard.Parent = obj
+        jeffArtifacts[billboard] = true
+    end
+
+    if billboard:IsA("BillboardGui") then
+        local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+        if part then billboard.Adornee = part end
+    end
+end
+
+local function disableJeffXray()
+    jeffXrayToken = jeffXrayToken + 1
+    jeffXrayEnabled = false
+    if jeffXrayConnection then
+        jeffXrayConnection:Disconnect()
+        jeffXrayConnection = nil
+    end
+    if jeffPartConnection then
+        jeffPartConnection:Disconnect()
+        jeffPartConnection = nil
+    end
+    for artifact in pairs(jeffArtifacts) do
+        if artifact.Parent then artifact:Destroy() end
+    end
+    table.clear(jeffArtifacts)
+    setJeffButtonState(false)
+end
+
+connect(jeffButton.Activated, function()
+    clickSound()
+    if jeffXrayEnabled then
+        disableJeffXray()
+        notify("JEFF X-RAY / Disabled", true)
+        return
+    end
+    jeffXrayEnabled = true
+    jeffXrayToken = jeffXrayToken + 1
+    setJeffButtonState(true)
+    jeffXrayConnection = workspace.ChildAdded:Connect(addJeffESP)
+    jeffPartConnection = workspace.DescendantAdded:Connect(function(obj)
+        if not jeffXrayEnabled or not obj:IsA("BasePart") then return end
+        local model = obj:FindFirstAncestor("JeffTheKiller")
+        if model and model.Parent == workspace and model:IsA("Model") then
+            addJeffESP(model)
+        end
+    end)
+    for _, obj in ipairs(workspace:GetChildren()) do
+        addJeffESP(obj)
+    end
+    notify("JEFF X-RAY / Enabled", true)
+end)
+
+featureUI.jeffButton = jeffButton
+featureUI.jeffHeading = jeffHeading
+featureStop.jeff = disableJeffXray
+end
+
+do
+local monsterButton, monsterDescription, monsterHeading, monsterBorder = actionBox(
+    pages[1], "04 / VISUAL", "Monster Location", "You'll be spotted by the MischeviousLight  monster."
+)
+local monsterGradient = monsterButton:FindFirstChildOfClass("UIGradient")
+local monsterOriginalGradient = monsterGradient.Color
+local monsterBorderGradient = monsterBorder:FindFirstChildOfClass("UIGradient")
+local monsterEnabled = false
+local monsterConnection = nil
+local monsterArtifacts = setmetatable({}, {__mode = "k"})
+local workspaceModels = {
+    AmbushMoving = true,
+    RushMoving = true,
+    BackdoorRush = true,
+    BackdoorLookman = true,
+    LiveEntityBramble = true,
+    MonumentEntity = true,
+    Drones = true,
+    DronesStampede = true,
+    BashMoving = true,
+    Scribbles = true,
+    A60 = true,
+    A120 = true,
+}
+local liveEntitiesModels = {
+    Creak = true,
+    TellerRig = true,
+}
+local currentRoomsModels = {
+    FigureRig = true,
+    Groundskeeper = true,
+    TV_Stand = true,
+}
+
+local function setMonsterButtonState(enabled)
+    monsterGradient.Color = enabled and ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 69, 44)),
+        ColorSequenceKeypoint.new(0.44, Color3.fromRGB(37, 151, 77)),
+        ColorSequenceKeypoint.new(0.72, Color3.fromRGB(22, 116, 65)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 65, 42)),
+    }) or monsterOriginalGradient
+    monsterButton.BackgroundTransparency = enabled and 0.01 or 0.11
+    monsterBorderGradient.Enabled = not enabled
+    monsterBorder.Color = enabled and Color3.fromRGB(116, 255, 150) or C.gold
+    tween(monsterBorder, {Thickness = enabled and 2.9 or 2}, 0.2)
+    for _, child in ipairs(monsterButton:GetChildren()) do
+        if child:IsA("TextLabel") then
+            local gold = child:FindFirstChildOfClass("UIGradient")
+            if gold then gold.Enabled = not enabled end
+            child.TextColor3 = enabled and Color3.fromRGB(230, 255, 230) or C.white
+        end
+    end
+end
+
+local function inMonsterFolder(obj, folderName)
+    local parent = obj.Parent
+    while parent and parent ~= workspace do
+        if parent.Name == folderName and parent.Parent == workspace then
+            return true
+        end
+        parent = parent.Parent
+    end
+    return false
+end
+
+local function isMonsterTarget(obj)
+    if not obj:IsA("Model") then return false end
+    if workspaceModels[obj.Name] and obj.Parent == workspace then return true end
+    if liveEntitiesModels[obj.Name] and inMonsterFolder(obj, "LiveEntities") then return true end
+    if currentRoomsModels[obj.Name] and inMonsterFolder(obj, "CurrentRooms") then return true end
+    return false
+end
+
+local function addMonsterESP(obj)
+    if not monsterEnabled or not isMonsterTarget(obj) then return end
+
+    if not obj:FindFirstChild("EntityHighlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "EntityHighlight"
+        highlight.FillColor = Color3.fromRGB(255, 112, 114)
+        highlight.OutlineColor = Color3.fromRGB(255, 0, 4)
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Adornee = obj
+        highlight.Parent = obj
+        monsterArtifacts[highlight] = true
+    end
+
+    local billboard = obj:FindFirstChild("EntityBillboard")
+    if not billboard then
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = "EntityBillboard"
+        billboard.Size = UDim2.fromOffset(45, 45)
+        billboard.StudsOffsetWorldSpace = Vector3.new(0, 2, 0)
+        billboard.AlwaysOnTop = true
+        billboard.LightInfluence = 0
+        billboard.MaxDistance = 0
+
+        local icon = Instance.new("ImageLabel")
+        icon.Name = "EntityIcon"
+        icon.Size = UDim2.fromScale(1, 1)
+        icon.BackgroundTransparency = 1
+        icon.Image = "rbxassetid://95001390542167"
+        icon.ScaleType = Enum.ScaleType.Fit
+        icon.Parent = billboard
+
+        billboard.Parent = obj
+        monsterArtifacts[billboard] = true
+    end
+
+    if billboard:IsA("BillboardGui") and not billboard.Adornee then
+        billboard.Adornee = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+    end
+end
+
+local function onMonsterDescendantAdded(obj)
+    if not monsterEnabled then return end
+    if obj:IsA("Model") then
+        addMonsterESP(obj)
+        for _, descendant in ipairs(obj:GetDescendants()) do
+            if descendant:IsA("Model") then addMonsterESP(descendant) end
+        end
+    elseif obj:IsA("BasePart") then
+        local parent = obj.Parent
+        while parent and parent ~= workspace do
+            if parent:IsA("Model") then addMonsterESP(parent) end
+            parent = parent.Parent
+        end
+    elseif obj:IsA("Folder") then
+        for _, descendant in ipairs(obj:GetDescendants()) do
+            if descendant:IsA("Model") then addMonsterESP(descendant) end
+        end
+    end
+end
+
+local function disableMonsterLocation()
+    monsterEnabled = false
+    if monsterConnection then
+        monsterConnection:Disconnect()
+        monsterConnection = nil
+    end
+    for artifact in pairs(monsterArtifacts) do
+        if artifact.Parent then artifact:Destroy() end
+    end
+    table.clear(monsterArtifacts)
+    setMonsterButtonState(false)
+end
+
+connect(monsterButton.Activated, function()
+    clickSound()
+    if monsterEnabled then
+        disableMonsterLocation()
+        notify("MONSTER LOCATION / Disabled", true)
+        return
+    end
+    monsterEnabled = true
+    setMonsterButtonState(true)
+    monsterConnection = workspace.DescendantAdded:Connect(onMonsterDescendantAdded)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") then addMonsterESP(obj) end
+    end
+    notify("MONSTER LOCATION / Enabled", true)
+end)
+
+featureUI.monsterButton = monsterButton
+featureUI.monsterHeading = monsterHeading
+featureStop.monster = disableMonsterLocation
+end
+
+do
+local deleteScreechButton, deleteScreechDescription, deleteScreechHeading = actionBox(
+    pages[1], "05 / CONTROL", "Delete Screech", "BYE BYE Screech"
+)
+local deleteScreechBusy = false
+connect(deleteScreechButton.Activated, function()
+    if deleteScreechBusy then return end
+    clickSound()
+    deleteScreechBusy = true
+    task.spawn(function()
+        local success, result = pcall(function()
+            local screech = ReplicatedStorage:WaitForChild("Entities"):FindFirstChild("Screech")
+            if screech then
+                screech:Destroy()
+                return true
+            end
+            return false
+        end)
+        deleteScreechBusy = false
+        if not alive then return end
+        if success and result then
+            notify("SCREECH / Deleted", true)
+        elseif success then
+            notify("SCREECH / Not found")
+        else
+            notify("SCREECH / Unable to delete", false)
+        end
+    end)
+end)
+
+featureUI.deleteScreechButton = deleteScreechButton
+featureUI.deleteScreechHeading = deleteScreechHeading
+end
+
+do
+local reminderButton, reminderDescription, reminderHeading, reminderBorder = actionBox(
+    pages[1], "06 / ALERT", "Generate Reminder", "Guiding light will remind you."
+)
+local reminderGradient = reminderButton:FindFirstChildOfClass("UIGradient")
+local reminderOriginalGradient = reminderGradient.Color
+local reminderBorderGradient = reminderBorder:FindFirstChildOfClass("UIGradient")
+local reminderEnabled = false
+local reminderScreenGui = nil
+local reminderAddedConnection = nil
+local reminderRemovingConnection = nil
+local reminderDetected = setmetatable({}, {__mode = "k"})
+local reminderNotificationID = 0
+local reminderActiveFrame = nil
+local reminderActiveRotation = nil
+local reminderActiveShine = nil
+local reminderTargets = {
+    Rebound = true,
+    Shocker = true,
+    ["Deer God"] = true,
+    ["Z-367"] = true,
+    Ripper = true,
+    Silence = true,
+    Angler = true,
+    Muffler = true,
+    WH1T3 = true,
+    Obsession = true,
+    Kitty = true,
+    Hunger = true,
+    Him = true,
+    ["Grandfather Clock"] = true,
+    Depth = true,
+    ["A-200"] = true,
+    Cease = true,
+    Happy = true,
+    Bite = true,
+    Principal = true,
+    A120_Scribblet = true,
+    Mushcore = true,
+    SilenceRemake = true,
+    Frostbite = true,
+}
+
+local function setReminderButtonState(enabled)
+    reminderGradient.Color = enabled and ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 69, 44)),
+        ColorSequenceKeypoint.new(0.44, Color3.fromRGB(37, 151, 77)),
+        ColorSequenceKeypoint.new(0.72, Color3.fromRGB(22, 116, 65)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 65, 42)),
+    }) or reminderOriginalGradient
+    reminderButton.BackgroundTransparency = enabled and 0.01 or 0.11
+    reminderBorderGradient.Enabled = not enabled
+    reminderBorder.Color = enabled and Color3.fromRGB(116, 255, 150) or C.gold
+    tween(reminderBorder, {Thickness = enabled and 2.9 or 2}, 0.2)
+    for _, child in ipairs(reminderButton:GetChildren()) do
+        if child:IsA("TextLabel") then
+            local gold = child:FindFirstChildOfClass("UIGradient")
+            if gold then gold.Enabled = not enabled end
+            child.TextColor3 = enabled and Color3.fromRGB(230, 255, 230) or C.white
+        end
+    end
+end
+
+local function reminderTween(object, duration, properties, style)
+    local animation = TS:Create(object, TweenInfo.new(
+        duration, style or Enum.EasingStyle.Quart, Enum.EasingDirection.Out
+    ), properties)
+    animation:Play()
+    return animation
+end
+
+local function clearReminderNotification()
+    reminderNotificationID = reminderNotificationID + 1
+    if reminderActiveRotation then
+        reminderActiveRotation:Cancel()
+        reminderActiveRotation = nil
+    end
+    if reminderActiveShine then
+        reminderActiveShine:Cancel()
+        reminderActiveShine = nil
+    end
+    if reminderActiveFrame then
+        reminderActiveFrame:Destroy()
+        reminderActiveFrame = nil
+    end
+end
+
+local function showReminderNotification()
+    if not reminderEnabled or not reminderScreenGui then return end
+    clearReminderNotification()
+    local currentID = reminderNotificationID
+    local frame = make("Frame", reminderScreenGui, {
+        Name = "HardcoreNotification",
+        Size = UDim2.fromOffset(380, 240),
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, 420, 0, 75),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    })
+    reminderActiveFrame = frame
+    local camera = workspace.CurrentCamera
+    local width = camera and camera.ViewportSize.X or 430
+    make("UIScale", frame, {Scale = math.clamp((width - 28) / 380, 0.55, 1)})
+
+    local rotatingImage = make("ImageLabel", frame, {
+        Name = "RotatingBackground",
+        Size = UDim2.fromOffset(190, 190),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0, 100),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://71699565716993",
+        ImageColor3 = Color3.fromRGB(170, 255, 255),
+        ImageTransparency = 1,
+        ScaleType = Enum.ScaleType.Fit,
+        ZIndex = 2,
+    })
+    local centerImage = make("ImageLabel", frame, {
+        Name = "CenterIcon",
+        Size = UDim2.fromOffset(48, 48),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0, 100),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://102339319752349",
+        ImageTransparency = 1,
+        ScaleType = Enum.ScaleType.Fit,
+        ZIndex = 3,
+    })
+    local glow = make("TextLabel", frame, {
+        Name = "BlueGlow",
+        Size = UDim2.new(1, 0, 0, 42),
+        Position = UDim2.new(0, 0, 0, 195),
+        BackgroundTransparency = 1,
+        Text = "Hardcore Monster Spawn",
+        TextSize = 23,
+        TextScaled = false,
+        TextColor3 = Color3.fromRGB(0, 190, 255),
+        TextTransparency = 1,
+        TextStrokeColor3 = Color3.fromRGB(0, 160, 255),
+        TextStrokeTransparency = 1,
+        Font = Enum.Font.GothamBlack,
+        ZIndex = 4,
+    })
+    local textLabel = make("TextLabel", frame, {
+        Name = "HardcoreText",
+        Size = glow.Size,
+        Position = glow.Position,
+        BackgroundTransparency = 1,
+        Text = "Hardcore Monster Spawn",
+        TextSize = 23,
+        TextScaled = false,
+        TextColor3 = Color3.fromRGB(170, 255, 255),
+        TextTransparency = 1,
+        TextStrokeColor3 = Color3.fromRGB(0, 95, 170),
+        TextStrokeTransparency = 1,
+        Font = Enum.Font.GothamBlack,
+        ZIndex = 5,
+    })
+    pcall(function()
+        local customFont = Font.new("rbxassetid://12187376357")
+        textLabel.FontFace = customFont
+        glow.FontFace = customFont
+    end)
+    local blueGradient = make("UIGradient", textLabel, {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 130, 255)),
+            ColorSequenceKeypoint.new(0.2, Color3.fromRGB(85, 215, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(225, 255, 255)),
+            ColorSequenceKeypoint.new(0.8, Color3.fromRGB(100, 220, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 125, 255)),
+        }),
+        Rotation = 15,
+    })
+
+    local rotationTween = TS:Create(rotatingImage, TweenInfo.new(
+        12, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1
+    ), {Rotation = 360})
+    local shineTween = TS:Create(blueGradient, TweenInfo.new(
+        3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true
+    ), {Offset = Vector2.new(0.6, 0)})
+    reminderActiveRotation, reminderActiveShine = rotationTween, shineTween
+    rotationTween:Play()
+    shineTween:Play()
+
+    reminderTween(frame, 0.8, {Position = UDim2.new(1, -20, 0, 75)}, Enum.EasingStyle.Back)
+    reminderTween(rotatingImage, 1, {ImageTransparency = 0.05})
+    reminderTween(centerImage, 1, {ImageTransparency = 0})
+    reminderTween(glow, 1, {TextTransparency = 0.45, TextStrokeTransparency = 0.6})
+    reminderTween(textLabel, 1, {TextTransparency = 0, TextStrokeTransparency = 0.1})
+
+    task.delay(9, function()
+        if not reminderEnabled or currentID ~= reminderNotificationID or not frame.Parent then return end
+        reminderTween(frame, 0.8, {Position = UDim2.new(1, 420, 0, 75)})
+        reminderTween(rotatingImage, 0.7, {ImageTransparency = 1})
+        reminderTween(centerImage, 0.7, {ImageTransparency = 1})
+        reminderTween(glow, 0.7, {TextTransparency = 1, TextStrokeTransparency = 1})
+        reminderTween(textLabel, 0.7, {TextTransparency = 1, TextStrokeTransparency = 1})
+        task.delay(0.85, function()
+            if currentID == reminderNotificationID then clearReminderNotification() end
+        end)
+    end)
+end
+
+local function checkReminderMonster(obj)
+    if not reminderEnabled or reminderDetected[obj] then return end
+    local target = (obj.Name == "RushNew" and obj:IsA("BasePart"))
+        or (reminderTargets[obj.Name] and obj:IsA("Model"))
+    if target then
+        reminderDetected[obj] = true
+        showReminderNotification()
+    end
+end
+
+local function disableGenerateReminder()
+    reminderEnabled = false
+    if reminderAddedConnection then
+        reminderAddedConnection:Disconnect()
+        reminderAddedConnection = nil
+    end
+    if reminderRemovingConnection then
+        reminderRemovingConnection:Disconnect()
+        reminderRemovingConnection = nil
+    end
+    clearReminderNotification()
+    if reminderScreenGui then
+        reminderScreenGui:Destroy()
+        reminderScreenGui = nil
+    end
+    reminderDetected = setmetatable({}, {__mode = "k"})
+    setReminderButtonState(false)
+end
+
+connect(reminderButton.Activated, function()
+    clickSound()
+    if reminderEnabled then
+        disableGenerateReminder()
+        notify("GENERATE REMINDER / Disabled", true)
+        return
+    end
+    reminderEnabled = true
+    local oldNotification = playerGui:FindFirstChild("ReboundNotification")
+    if oldNotification then oldNotification:Destroy() end
+    reminderScreenGui = make("ScreenGui", playerGui, {
+        Name = "ReboundNotification",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 999,
+    })
+    setReminderButtonState(true)
+    reminderAddedConnection = workspace.DescendantAdded:Connect(checkReminderMonster)
+    reminderRemovingConnection = workspace.DescendantRemoving:Connect(function(obj)
+        reminderDetected[obj] = nil
+    end)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        checkReminderMonster(obj)
+    end
+    notify("GENERATE REMINDER / Enabled", true)
+end)
+
+featureUI.reminderButton = reminderButton
+featureUI.reminderHeading = reminderHeading
+featureStop.reminder = disableGenerateReminder
+end
+
+do
+local sprintButton, sprintDescription, sprintHeading = actionBox(
+    pages[1], "07 / MOVEMENT", "Start Sprint", "Sprint"
+)
+local sprintBusy = false
+connect(sprintButton.Activated, function()
+    if sprintBusy then return end
+    clickSound()
+    sprintBusy = true
+    notify("START SPRINT / Loading...")
+    task.spawn(function()
+        local ok = pcall(function()
+            assert(type(loadstring) == "function", "loadstring unavailable")
+            loadstring(game:HttpGet("https://github.com/Zero0Star/RipperNewSound/blob/master/Sprint2.lua?raw=true"))()
+        end)
+        sprintBusy = false
+        if alive and gui.Parent then
+            notify(ok and "START SPRINT / Launched" or "START SPRINT / Unable to launch", ok)
+        end
+    end)
+end)
+
+featureUI.sprintButton = sprintButton
+featureUI.sprintHeading = sprintHeading
+end
+
+local overviewScroll = make("ScrollingFrame", pages[1], {
+    Name = "XrayToolsScroll", Position = UDim2.fromOffset(0, 69),
+    Size = UDim2.new(1, 0, 1, -73),
+    BackgroundTransparency = 1, BorderSizePixel = 0,
+    ScrollBarThickness = 3, ScrollBarImageColor3 = C.gold,
+    ScrollingDirection = Enum.ScrollingDirection.Y,
+    CanvasSize = UDim2.fromOffset(0, 0), ZIndex = 14,
+})
+featureUI.keyButton.Parent = overviewScroll
+featureUI.doorButton.Parent = overviewScroll
+featureUI.jeffButton.Parent = overviewScroll
+featureUI.monsterButton.Parent = overviewScroll
+featureUI.deleteScreechButton.Parent = overviewScroll
+featureUI.reminderButton.Parent = overviewScroll
+featureUI.sprintButton.Parent = overviewScroll
+
+sectionHeader(pages[2], "UTILITY MODULES", "02 / SELECT A CLIENT TOOL")
+local dexButton = actionBox(pages[2], "01 / EXPLORER", "Dex", "The ability to edit everything")
+local nvButton, nvDescription = actionBox(pages[2], "02 / VISUAL", "Night Vision", "Illuminate everything")
+local toolsScroll = make("ScrollingFrame", pages[2], {
+    Name = "ToolsScroll", Position = UDim2.fromOffset(0, 69),
+    Size = UDim2.new(1, 0, 1, -73),
+    BackgroundTransparency = 1, BorderSizePixel = 0,
+    ScrollBarThickness = 3, ScrollBarImageColor3 = C.gold,
+    ScrollingDirection = Enum.ScrollingDirection.Y,
+    CanvasSize = UDim2.fromOffset(0, 0), ZIndex = 14,
+})
+dexButton.Parent = toolsScroll
+nvButton.Parent = toolsScroll
+local toolsNote = label(toolsScroll, "TOOLS REQUIRE AN ENVIRONMENT SUPPORTING loadstring + HttpGet.", 10, {
+    Size = UDim2.new(1, -8, 0, 24), TextColor3 = C.muted,
+    TextXAlignment = Enum.TextXAlignment.Center,
+})
+
+do
+local flyButton = actionBox(toolsScroll, "03 / MOVEMENT", "Fly", "Start flying")
+local flyBusy = false
+connect(flyButton.Activated, function()
+    if flyBusy then return end
+    clickSound()
+    flyBusy = true
+    notify("FLY / Loading...")
+    task.spawn(function()
+        local ok = pcall(function()
+            assert(type(loadstring) == "function", "loadstring unavailable")
+            loadstring("\108\111\97\100\115\116\114\105\110\103\40\103\97\109\101\58\72\116\116\112\71\101\116\40\34\104\116\116\112\115\58\47\47\112\97\115\116\101\98\105\110\46\99\111\109\47\114\97\119\47\90\66\122\99\84\109\49\102\34\41\41\40\41\10")()
+        end)
+        flyBusy = false
+        if alive and gui.Parent then
+            notify(ok and "FLY / Launched" or "FLY / Unable to launch", ok)
+        end
+    end)
+end)
+featureUI.flyButton = flyButton
+end
+
+do
+local healthButton, healthDescription, healthHeading, healthBorder = actionBox(
+    toolsScroll, "04 / VITALS", "Health Bar", "Start Player Health"
+)
+local healthGui = nil
+local healthGradient = healthButton:FindFirstChildOfClass("UIGradient")
+local healthOriginalGradient = healthGradient.Color
+local healthBorderGradient = healthBorder:FindFirstChildOfClass("UIGradient")
+
+local function setHealthButtonState(enabled)
+    healthGradient.Color = enabled and ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 69, 44)),
+        ColorSequenceKeypoint.new(0.44, Color3.fromRGB(37, 151, 77)),
+        ColorSequenceKeypoint.new(0.72, Color3.fromRGB(22, 116, 65)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 65, 42)),
+    }) or healthOriginalGradient
+    healthButton.BackgroundTransparency = enabled and 0.01 or 0.11
+    healthBorderGradient.Enabled = not enabled
+    healthBorder.Color = enabled and Color3.fromRGB(116, 255, 150) or C.gold
+    tween(healthBorder, {Thickness = enabled and 2.9 or 2}, 0.2)
+    for _, child in ipairs(healthButton:GetChildren()) do
+        if child:IsA("TextLabel") then
+            local gold = child:FindFirstChildOfClass("UIGradient")
+            if gold then gold.Enabled = not enabled end
+            child.TextColor3 = enabled and Color3.fromRGB(230, 255, 230) or C.white
+        end
+    end
+end
+
+local function launchHealthBar()
+    local Players = game:GetService("Players")
+    local TweenService = game:GetService("TweenService")
+    local UserInputService = game:GetService("UserInputService")
+
+    local LocalPlayer = Players.LocalPlayer
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+    local OldGui = PlayerGui:FindFirstChild("PlayerHealthUI")
+    if OldGui then
+        OldGui:Destroy()
+    end
+
+    local function Create(className, properties, parent)
+        local instance = Instance.new(className)
+        for key, value in pairs(properties) do
+            instance[key] = value
+        end
+        instance.Parent = parent
+        return instance
+    end
+
+    local function Round(parent, radius)
+        return Create("UICorner", {CornerRadius = UDim.new(0, radius)}, parent)
+    end
+
+    local function Animate(object, duration, properties)
+        local tween = TweenService:Create(
+            object,
+            TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            properties
+        )
+        tween:Play()
+        return tween
+    end
+
+    local Gold = Color3.fromRGB(241, 197, 105)
+    local PaleGold = Color3.fromRGB(255, 235, 176)
+    local MutedGold = Color3.fromRGB(168, 137, 90)
+    local GoldSequence = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 88, 32)),
+        ColorSequenceKeypoint.new(0.24, Color3.fromRGB(244, 188, 76)),
+        ColorSequenceKeypoint.new(0.48, Color3.fromRGB(255, 248, 196)),
+        ColorSequenceKeypoint.new(0.74, Color3.fromRGB(248, 193, 85)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(143, 86, 32))
+    })
+
+    local ScreenGui = Create("ScreenGui", {
+        Name = "PlayerHealthUI",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 900,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    }, PlayerGui)
+
+    local Viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
+    local BaseWidth = 340
+    local BaseHeight = 405
+    local InitialScale = math.clamp(math.min(1, (Viewport.X - 24) / BaseWidth, (Viewport.Y - 90) / BaseHeight), 0.65, 1)
+
+    local Main = Create("Frame", {
+        Name = "GoldenVitals",
+        Position = UDim2.fromOffset(math.max(6, Viewport.X - BaseWidth * InitialScale - 22), 72),
+        Size = UDim2.fromOffset(BaseWidth, BaseHeight),
+        BackgroundColor3 = Color3.fromRGB(20, 18, 22),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ClipsDescendants = false,
+        Active = true,
+        ZIndex = 2
+    }, ScreenGui)
+    Round(Main, 17)
+
+    local Scale = Create("UIScale", {Scale = InitialScale}, Main)
+
+    local HeaderBackdrop = Create("Frame", {
+        Name = "HeaderBackdrop",
+        Position = UDim2.fromOffset(0, 0),
+        Size = UDim2.new(1, 0, 0, 114),
+        BackgroundColor3 = Color3.fromRGB(24, 21, 23),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 3
+    }, Main)
+    Round(HeaderBackdrop, 17)
+
+    Create("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(39, 30, 29)),
+            ColorSequenceKeypoint.new(0.55, Color3.fromRGB(19, 19, 26)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(31, 24, 24))
+        }),
+        Rotation = 35
+    }, HeaderBackdrop)
+
+    local OuterGlow = Create("UIStroke", {
+        Color = Color3.fromRGB(220, 145, 55),
+        Thickness = 7,
+        Transparency = 0.9
+    }, Main)
+
+    local Border = Create("UIStroke", {
+        Color = Gold,
+        Thickness = 1.8,
+        Transparency = 0.05
+    }, Main)
+
+    local BorderGradient = Create("UIGradient", {
+        Color = GoldSequence,
+        Rotation = 20,
+        Offset = Vector2.new(-0.65, 0)
+    }, Border)
+
+    local Header = Create("Frame", {
+        Name = "DragHeader",
+        Position = UDim2.fromOffset(0, 0),
+        Size = UDim2.new(1, 0, 0, 80),
+        BackgroundTransparency = 1,
+        Active = true,
+        ZIndex = 4
+    }, Main)
+
+    local TopLine = Create("Frame", {
+        Position = UDim2.fromOffset(16, 6),
+        Size = UDim2.new(1, -32, 0, 3),
+        BorderSizePixel = 0,
+        BackgroundColor3 = PaleGold,
+        ZIndex = 5
+    }, Header)
+    Round(TopLine, 3)
+    Create("UIGradient", {Color = GoldSequence, Rotation = 0}, TopLine)
+
+    local Emblem = Create("Frame", {
+        Position = UDim2.fromOffset(16, 23),
+        Size = UDim2.fromOffset(42, 42),
+        BackgroundColor3 = Color3.fromRGB(62, 42, 26),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 5
+    }, Header)
+    Round(Emblem, 13)
+    Create("UIStroke", {Color = Gold, Thickness = 1.1, Transparency = 0.25}, Emblem)
+    Create("UIGradient", {
+        Color = ColorSequence.new(Color3.fromRGB(84, 58, 32), Color3.fromRGB(35, 29, 32)),
+        Rotation = 50
+    }, Emblem)
+
+    Create("TextLabel", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Text = "✦",
+        TextColor3 = PaleGold,
+        Font = Enum.Font.GothamBold,
+        TextSize = 27,
+        ZIndex = 6
+    }, Emblem)
+
+    local Title = Create("TextLabel", {
+        Position = UDim2.fromOffset(69, 22),
+        Size = UDim2.fromOffset(172, 24),
+        BackgroundTransparency = 1,
+        Text = "Health bar",
+        Font = Enum.Font.GothamBlack,
+        TextSize = 17,
+        TextColor3 = Color3.new(1, 1, 1),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 5
+    }, Header)
+
+    local TitleGradient = Create("UIGradient", {
+        Color = GoldSequence,
+        Rotation = 12,
+        Offset = Vector2.new(-0.6, 0)
+    }, Title)
+
+    Create("TextLabel", {
+        Position = UDim2.fromOffset(69, 46),
+        Size = UDim2.fromOffset(185, 14),
+        BackgroundTransparency = 1,
+        Text = "LIVE PLAYER HEALTH",
+        TextColor3 = MutedGold,
+        TextSize = 10,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 5
+    }, Header)
+
+    local CountBadge = Create("Frame", {
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -16, 0, 29),
+        Size = UDim2.fromOffset(84, 27),
+        BackgroundColor3 = Color3.fromRGB(62, 47, 33),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 5
+    }, Header)
+    Round(CountBadge, 12)
+    Create("UIStroke", {Color = Gold, Transparency = 0.55, Thickness = 1}, CountBadge)
+
+    local CountText = Create("TextLabel", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Text = "0 ONLINE",
+        TextColor3 = PaleGold,
+        TextSize = 10,
+        Font = Enum.Font.GothamBold,
+        ZIndex = 6
+    }, CountBadge)
+
+    Create("Frame", {
+        Position = UDim2.fromOffset(16, 79),
+        Size = UDim2.new(1, -32, 0, 1),
+        BackgroundColor3 = Gold,
+        BackgroundTransparency = 0.72,
+        BorderSizePixel = 0,
+        ZIndex = 4
+    }, Main)
+
+    Create("TextLabel", {
+        Position = UDim2.fromOffset(17, 91),
+        Size = UDim2.fromOffset(175, 19),
+        BackgroundTransparency = 1,
+        Text = "PLAYER STATUS",
+        Font = Enum.Font.GothamBold,
+        TextSize = 11,
+        TextColor3 = Gold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 4
+    }, Main)
+
+    Create("TextLabel", {
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -18, 0, 91),
+        Size = UDim2.fromOffset(92, 19),
+        BackgroundTransparency = 1,
+        Text = "HP / MAX HP",
+        Font = Enum.Font.GothamMedium,
+        TextSize = 9,
+        TextColor3 = MutedGold,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        ZIndex = 4
+    }, Main)
+
+    local PlayerScroll = Create("ScrollingFrame", {
+        Name = "PlayerList",
+        Position = UDim2.fromOffset(14, 116),
+        Size = UDim2.new(1, -28, 1, -169),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = Gold,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ZIndex = 4
+    }, Main)
+
+    Create("UIPadding", {
+        PaddingTop = UDim.new(0, 3),
+        PaddingBottom = UDim.new(0, 5),
+        PaddingLeft = UDim.new(0, 1),
+        PaddingRight = UDim.new(0, 5)
+    }, PlayerScroll)
+
+    Create("UIListLayout", {
+        Padding = UDim.new(0, 9),
+        SortOrder = Enum.SortOrder.LayoutOrder
+    }, PlayerScroll)
+
+    local Empty = Create("TextLabel", {
+        Name = "EmptyState",
+        Size = UDim2.new(1, 0, 0, 110),
+        BackgroundTransparency = 1,
+        Text = "NO OTHER PLAYERS\nWaiting for players to join...",
+        TextColor3 = MutedGold,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 12,
+        TextWrapped = true,
+        LineHeight = 1.5,
+        LayoutOrder = -1,
+        ZIndex = 4
+    }, PlayerScroll)
+
+    Create("Frame", {
+        Position = UDim2.new(0, 16, 1, -45),
+        Size = UDim2.new(1, -32, 0, 1),
+        BackgroundColor3 = Gold,
+        BackgroundTransparency = 0.75,
+        BorderSizePixel = 0,
+        ZIndex = 4
+    }, Main)
+
+    Create("TextLabel", {
+        Position = UDim2.new(0, 17, 1, -34),
+        Size = UDim2.fromOffset(187, 19),
+        BackgroundTransparency = 1,
+        Text = "DRAG HEADER  ·  RESIZE CORNER",
+        TextColor3 = MutedGold,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 9,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 4
+    }, Main)
+
+    local function MakeSizeButton(symbol, xOffset)
+        local button = Create("TextButton", {
+            AnchorPoint = Vector2.new(1, 1),
+            Position = UDim2.new(1, xOffset, 1, -11),
+            Size = UDim2.fromOffset(26, 24),
+            Text = symbol,
+            TextColor3 = PaleGold,
+            TextSize = 17,
+            Font = Enum.Font.GothamBold,
+            BackgroundColor3 = Color3.fromRGB(56, 42, 33),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            AutoButtonColor = true,
+            ZIndex = 7
+        }, Main)
+        Round(button, 7)
+        Create("UIStroke", {Color = Gold, Transparency = 0.6, Thickness = 1}, button)
+        return button
+    end
+
+    local Minus = MakeSizeButton("−", -70)
+    local Plus = MakeSizeButton("+", -40)
+
+    local ResizeGrip = Create("TextButton", {
+        Name = "ResizeGrip",
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -7, 1, -7),
+        Size = UDim2.fromOffset(29, 29),
+        BackgroundTransparency = 1,
+        Text = "↘",
+        TextColor3 = Gold,
+        TextSize = 23,
+        Font = Enum.Font.GothamBold,
+        AutoButtonColor = false,
+        ZIndex = 9
+    }, Main)
+
+    local function ConstrainPosition(x, y, scale)
+        local camera = workspace.CurrentCamera
+        local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+        return math.clamp(x, 6, math.max(6, viewport.X - BaseWidth * scale - 6)),
+               math.clamp(y, 6, math.max(6, viewport.Y - BaseHeight * scale - 6))
+    end
+
+    local function SetScale(value, animated)
+        local camera = workspace.CurrentCamera
+        local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+        local screenMax = math.min((viewport.X - 12) / BaseWidth, (viewport.Y - 12) / BaseHeight)
+        local maximum = math.max(0.55, math.min(1.5, screenMax))
+        local target = math.clamp(value, math.min(0.65, maximum), maximum)
+        local x, y = ConstrainPosition(Main.Position.X.Offset, Main.Position.Y.Offset, target)
+        if animated then
+            Animate(Scale, 0.2, {Scale = target})
+            Animate(Main, 0.2, {Position = UDim2.fromOffset(x, y)})
+        else
+            Scale.Scale = target
+            Main.Position = UDim2.fromOffset(x, y)
+        end
+    end
+
+    Minus.MouseButton1Click:Connect(function()
+        SetScale(Scale.Scale - 0.1, true)
+    end)
+
+    Plus.MouseButton1Click:Connect(function()
+        SetScale(Scale.Scale + 0.1, true)
+    end)
+
+    local dragging = false
+    local resizing = false
+    local dragTouch
+    local resizeTouch
+    local dragStart
+    local dragPosition
+    local resizeStart
+    local resizeScale
+
+    Header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            resizing = false
+            dragTouch = input.UserInputType == Enum.UserInputType.Touch and input or nil
+            dragStart = input.Position
+            dragPosition = Vector2.new(Main.Position.X.Offset, Main.Position.Y.Offset)
+        end
+    end)
+
+    ResizeGrip.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = true
+            dragging = false
+            resizeTouch = input.UserInputType == Enum.UserInputType.Touch and input or nil
+            resizeStart = input.Position
+            resizeScale = Scale.Scale
+        end
+    end)
+
+    local InputChangedConnection = UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input == dragTouch or (not dragTouch and input.UserInputType == Enum.UserInputType.MouseMovement)) then
+            local delta = input.Position - dragStart
+            local x, y = ConstrainPosition(dragPosition.X + delta.X, dragPosition.Y + delta.Y, Scale.Scale)
+            Main.Position = UDim2.fromOffset(x, y)
+        elseif resizing and (input == resizeTouch or (not resizeTouch and input.UserInputType == Enum.UserInputType.MouseMovement)) then
+            local delta = input.Position - resizeStart
+            local dx = delta.X / BaseWidth
+            local dy = delta.Y / BaseHeight
+            local change = math.abs(dx) >= math.abs(dy) and dx or dy
+            SetScale(resizeScale + change, false)
+        end
+    end)
+
+    local InputEndedConnection = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+            resizing = false
+        elseif input.UserInputType == Enum.UserInputType.Touch then
+            if input == dragTouch then
+                dragging = false
+                dragTouch = nil
+            end
+            if input == resizeTouch then
+                resizing = false
+                resizeTouch = nil
+            end
+        end
+    end)
+
+    local Entries = {}
+    local Order = 0
+
+    local function Disconnect(connection)
+        if connection then
+            connection:Disconnect()
+        end
+    end
+
+    local function UpdateCount()
+        local count = 0
+        for _ in pairs(Entries) do
+            count += 1
+        end
+        CountText.Text = string.format("%d ONLINE", count)
+        Empty.Visible = count == 0
+    end
+
+    local function BindCharacter(player, character)
+        local entry = Entries[player]
+        if not entry then
+            return
+        end
+
+        Disconnect(entry.healthConnection)
+        Disconnect(entry.maxHealthConnection)
+        entry.healthConnection = nil
+        entry.maxHealthConnection = nil
+        entry.hp.Text = "LOADING"
+        entry.fill.Size = UDim2.fromScale(0, 1)
+
+        local humanoid = character:WaitForChild("Humanoid", 10)
+        if not humanoid or Entries[player] ~= entry or player.Character ~= character then
+            return
+        end
+
+        local function UpdateHealth()
+            if Entries[player] ~= entry or player.Character ~= character then
+                return
+            end
+            local maxHP = math.max(0, humanoid.MaxHealth)
+            local hp = math.clamp(humanoid.Health, 0, maxHP)
+            local ratio = maxHP > 0 and hp / maxHP or 0
+            entry.hp.Text = string.format("%d / %d", math.floor(hp + 0.5), math.floor(maxHP + 0.5))
+            entry.hp.TextColor3 = hp > 0 and PaleGold or Color3.fromRGB(255, 126, 121)
+            local color = Color3.fromRGB(223, 75, 80):Lerp(Color3.fromRGB(245, 201, 103), ratio)
+            Animate(entry.fill, 0.25, {
+                Size = UDim2.new(ratio, 0, 1, 0),
+                BackgroundColor3 = color
+            })
+        end
+
+        entry.healthConnection = humanoid.HealthChanged:Connect(UpdateHealth)
+        entry.maxHealthConnection = humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(UpdateHealth)
+        UpdateHealth()
+    end
+
+    local function AddPlayer(player)
+        if player == LocalPlayer or Entries[player] then
+            return
+        end
+
+        Order += 1
+        local Row = Create("Frame", {
+            Name = "Player_" .. player.UserId,
+            Size = UDim2.new(1, 0, 0, 77),
+            BackgroundColor3 = Color3.fromRGB(38, 34, 37),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            LayoutOrder = Order,
+            ZIndex = 5
+        }, PlayerScroll)
+        Round(Row, 11)
+        Create("UIStroke", {Color = Gold, Thickness = 1, Transparency = 0.72}, Row)
+        Create("UIGradient", {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(47, 36, 33)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 29, 36))
+            }),
+            Rotation = 14
+        }, Row)
+
+        local Avatar = Create("ImageLabel", {
+            Position = UDim2.fromOffset(11, 13),
+            Size = UDim2.fromOffset(47, 47),
+            BackgroundColor3 = Color3.fromRGB(65, 51, 41),
+            BorderSizePixel = 0,
+            Image = "",
+            ScaleType = Enum.ScaleType.Crop,
+            ZIndex = 6
+        }, Row)
+        Round(Avatar, 10)
+        Create("UIStroke", {Color = PaleGold, Thickness = 1.5, Transparency = 0.25}, Avatar)
+
+        local Info = Create("Frame", {
+            Position = UDim2.fromOffset(70, 7),
+            Size = UDim2.new(1, -80, 1, -14),
+            BackgroundTransparency = 1,
+            ZIndex = 6
+        }, Row)
+
+        Create("TextLabel", {
+            Position = UDim2.fromOffset(0, 2),
+            Size = UDim2.new(1, -88, 0, 19),
+            BackgroundTransparency = 1,
+            Text = player.DisplayName,
+            Font = Enum.Font.GothamBold,
+            TextSize = 12,
+            TextColor3 = Color3.fromRGB(255, 247, 226),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = 7
+        }, Info)
+
+        Create("TextLabel", {
+            Position = UDim2.fromOffset(0, 23),
+            Size = UDim2.new(1, -5, 0, 14),
+            BackgroundTransparency = 1,
+            Text = "@" .. player.Name,
+            Font = Enum.Font.Gotham,
+            TextSize = 10,
+            TextColor3 = MutedGold,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = 7
+        }, Info)
+
+        local Hp = Create("TextLabel", {
+            AnchorPoint = Vector2.new(1, 0),
+            Position = UDim2.new(1, 0, 0, 2),
+            Size = UDim2.fromOffset(84, 19),
+            BackgroundTransparency = 1,
+            Text = "LOADING",
+            Font = Enum.Font.GothamBold,
+            TextSize = 11,
+            TextColor3 = PaleGold,
+            TextXAlignment = Enum.TextXAlignment.Right,
+            ZIndex = 7
+        }, Info)
+
+        local Bar = Create("Frame", {
+            Position = UDim2.new(0, 0, 1, -12),
+            Size = UDim2.new(1, 0, 0, 7),
+            BackgroundColor3 = Color3.fromRGB(67, 58, 59),
+            BorderSizePixel = 0,
+            ClipsDescendants = true,
+            ZIndex = 7
+        }, Info)
+        Round(Bar, 5)
+
+        local Fill = Create("Frame", {
+            Size = UDim2.fromScale(0, 1),
+            BackgroundColor3 = Gold,
+            BorderSizePixel = 0,
+            ZIndex = 8
+        }, Bar)
+        Round(Fill, 5)
+
+        local entry = {row = Row, fill = Fill, hp = Hp}
+        Entries[player] = entry
+        UpdateCount()
+
+        task.spawn(function()
+            local ok, thumbnail = pcall(function()
+                return Players:GetUserThumbnailAsync(
+                    player.UserId,
+                    Enum.ThumbnailType.HeadShot,
+                    Enum.ThumbnailSize.Size48x48
+                )
+            end)
+            if ok and Entries[player] == entry then
+                Avatar.Image = thumbnail
+            end
+        end)
+
+        entry.characterConnection = player.CharacterAdded:Connect(function(character)
+            task.spawn(BindCharacter, player, character)
+        end)
+
+        if player.Character then
+            task.spawn(BindCharacter, player, player.Character)
+        end
+    end
+
+    local function RemovePlayer(player)
+        local entry = Entries[player]
+        if not entry then
+            return
+        end
+        Entries[player] = nil
+        Disconnect(entry.healthConnection)
+        Disconnect(entry.maxHealthConnection)
+        Disconnect(entry.characterConnection)
+        entry.row:Destroy()
+        UpdateCount()
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        AddPlayer(player)
+    end
+
+    local PlayerAddedConnection = Players.PlayerAdded:Connect(AddPlayer)
+    local PlayerRemovingConnection = Players.PlayerRemoving:Connect(RemovePlayer)
+
+    ScreenGui.Destroying:Connect(function()
+        InputChangedConnection:Disconnect()
+        InputEndedConnection:Disconnect()
+        PlayerAddedConnection:Disconnect()
+        PlayerRemovingConnection:Disconnect()
+        for _, entry in pairs(Entries) do
+            Disconnect(entry.healthConnection)
+            Disconnect(entry.maxHealthConnection)
+            Disconnect(entry.characterConnection)
+        end
+    end)
+
+    TweenService:Create(
+        BorderGradient,
+        TweenInfo.new(4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+        {Offset = Vector2.new(0.7, 0)}
+    ):Play()
+
+    TweenService:Create(
+        TitleGradient,
+        TweenInfo.new(3.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+        {Offset = Vector2.new(0.65, 0)}
+    ):Play()
+    return ScreenGui
+end
+
+local function stopHealthBar()
+    local current = healthGui
+    healthGui = nil
+    if current and current.Parent then current:Destroy() end
+    setHealthButtonState(false)
+end
+
+connect(healthButton.Activated, function()
+    clickSound()
+    if healthGui and healthGui.Parent then
+        stopHealthBar()
+        notify("HEALTH BAR / Closed", true)
+        return
+    end
+    local ok, created = pcall(launchHealthBar)
+    if not ok or not created then
+        local unfinished = playerGui:FindFirstChild("PlayerHealthUI")
+        if unfinished then unfinished:Destroy() end
+        notify("HEALTH BAR / Unable to start", false)
+        return
+    end
+    healthGui = created
+    setHealthButtonState(true)
+    created.Destroying:Connect(function()
+        if healthGui == created then
+            healthGui = nil
+            setHealthButtonState(false)
+        end
+    end)
+    notify("HEALTH BAR / Started", true)
+end)
+
+featureUI.healthButton = healthButton
+featureStop.health = stopHealthBar
+end
+
+do
+local scanButton, scanDescription, scanHeading, scanBorder = actionBox(
+    toolsScroll, "05 / RADAR", "Scan", "Scan all the players."
+)
+local radarGui = nil
+local scanGradient = scanButton:FindFirstChildOfClass("UIGradient")
+local originalScanGradient = scanGradient.Color
+local scanBorderGradient = scanBorder:FindFirstChildOfClass("UIGradient")
+
+local function setScanButtonState(enabled)
+    scanGradient.Color = enabled and ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 69, 44)),
+        ColorSequenceKeypoint.new(0.44, Color3.fromRGB(37, 151, 77)),
+        ColorSequenceKeypoint.new(0.72, Color3.fromRGB(22, 116, 65)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 65, 42)),
+    }) or originalScanGradient
+    scanButton.BackgroundTransparency = enabled and 0.01 or 0.11
+    scanBorderGradient.Enabled = not enabled
+    scanBorder.Color = enabled and Color3.fromRGB(116, 255, 150) or C.gold
+    tween(scanBorder, {Thickness = enabled and 2.9 or 2}, 0.2)
+    for _, child in ipairs(scanButton:GetChildren()) do
+        if child:IsA("TextLabel") then
+            local gold = child:FindFirstChildOfClass("UIGradient")
+            if gold then gold.Enabled = not enabled end
+            child.TextColor3 = enabled and Color3.fromRGB(230, 255, 230) or C.white
+        end
+    end
+end
+
+local function launchScanner()
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local TweenService = game:GetService("TweenService")
+    local UserInputService = game:GetService("UserInputService")
+
+    local LocalPlayer = Players.LocalPlayer
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    local RANGE = 100
+    local RADAR_SIZE = 236
+    local RADAR_RADIUS = RADAR_SIZE / 2 - 8
+
+    local Old = PlayerGui:FindFirstChild("DeepGreenRadar")
+    if Old then
+        Old:Destroy()
+    end
+
+    local function Create(class, props, parent)
+        local obj = Instance.new(class)
+        for key, value in pairs(props) do
+            obj[key] = value
+        end
+        obj.Parent = parent
+        return obj
+    end
+
+    local Gui = Create("ScreenGui", {
+        Name = "DeepGreenRadar",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 500,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    }, PlayerGui)
+
+    local Main = Create("Frame", {
+        Name = "RadarPanel",
+        Size = UDim2.fromOffset(264, 307),
+        Position = UDim2.new(1, -284, 0, 140),
+        BackgroundColor3 = Color3.fromRGB(7, 23, 17),
+        BackgroundTransparency = 0.08,
+        BorderSizePixel = 0,
+        Active = true
+    }, Gui)
+
+    Create("UICorner", {CornerRadius = UDim.new(0, 17)}, Main)
+    Create("UIStroke", {
+        Color = Color3.fromRGB(44, 143, 94),
+        Transparency = 0.25,
+        Thickness = 1.6
+    }, Main)
+    Create("UIGradient", {
+        Rotation = 85,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(16, 48, 33)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 17, 13))
+        })
+    }, Main)
+
+    local Header = Create("Frame", {
+        Name = "DragHandle",
+        Size = UDim2.new(1, 0, 0, 39),
+        BackgroundTransparency = 1,
+        Active = true
+    }, Main)
+
+    Create("TextLabel", {
+        Size = UDim2.new(1, -92, 1, 0),
+        Position = UDim2.fromOffset(14, 0),
+        BackgroundTransparency = 1,
+        Text = "Scanning...",
+        Font = Enum.Font.GothamBold,
+        TextSize = 13,
+        TextColor3 = Color3.fromRGB(164, 248, 185),
+        TextXAlignment = Enum.TextXAlignment.Left
+    }, Header)
+
+    local Status = Create("TextLabel", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -12, 0.5, 0),
+        Size = UDim2.fromOffset(72, 22),
+        BackgroundColor3 = Color3.fromRGB(16, 67, 40),
+        TextColor3 = Color3.fromRGB(127, 255, 157),
+        Text = "SCANNING",
+        Font = Enum.Font.GothamBold,
+        TextSize = 9
+    }, Header)
+    Create("UICorner", {CornerRadius = UDim.new(1, 0)}, Status)
+
+    local Radar = Create("Frame", {
+        Name = "RadarCircle",
+        Size = UDim2.fromOffset(RADAR_SIZE, RADAR_SIZE),
+        Position = UDim2.fromOffset(14, 42),
+        BackgroundColor3 = Color3.fromRGB(5, 34, 22),
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        Active = true
+    }, Main)
+    Create("UICorner", {CornerRadius = UDim.new(1, 0)}, Radar)
+    Create("UIStroke", {
+        Color = Color3.fromRGB(73, 198, 122),
+        Thickness = 1.5,
+        Transparency = 0.15
+    }, Radar)
+    Create("UIGradient", {
+        Rotation = 90,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(12, 58, 36)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(3, 22, 17))
+        })
+    }, Radar)
+
+    for _, diameter in ipairs({78, 155, 226}) do
+        local ring = Create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(diameter, diameter),
+            BackgroundTransparency = 1,
+            ZIndex = 2
+        }, Radar)
+        Create("UICorner", {CornerRadius = UDim.new(1, 0)}, ring)
+        Create("UIStroke", {
+            Color = Color3.fromRGB(56, 133, 86),
+            Transparency = 0.52,
+            Thickness = 1
+        }, ring)
+    end
+
+    Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, 0, 0, 1),
+        BackgroundColor3 = Color3.fromRGB(50, 119, 81),
+        BackgroundTransparency = 0.6,
+        BorderSizePixel = 0,
+        ZIndex = 2
+    }, Radar)
+    Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(0, 1, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(50, 119, 81),
+        BackgroundTransparency = 0.6,
+        BorderSizePixel = 0,
+        ZIndex = 2
+    }, Radar)
+
+    local Sweep = Create("Frame", {
+        Name = "ScanSweep",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        ZIndex = 3
+    }, Radar)
+
+    local SweepLine = Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(2, RADAR_RADIUS),
+        BackgroundColor3 = Color3.fromRGB(96, 255, 157),
+        BackgroundTransparency = 0.35,
+        BorderSizePixel = 0,
+        ZIndex = 3
+    }, Sweep)
+    Create("UIGradient", {
+        Rotation = 90,
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.88),
+            NumberSequenceKeypoint.new(1, 0.1)
+        })
+    }, SweepLine)
+
+    local CenterDot = Create("Frame", {
+        Name = "SelfDot",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(7, 7),
+        BackgroundColor3 = Color3.fromRGB(111, 255, 155),
+        BorderSizePixel = 0,
+        ZIndex = 6
+    }, Radar)
+    Create("UICorner", {CornerRadius = UDim.new(1, 0)}, CenterDot)
+
+    local Footer = Create("TextLabel", {
+        Position = UDim2.fromOffset(14, 282),
+        Size = UDim2.fromOffset(236, 18),
+        BackgroundTransparency = 1,
+        Text = "Network status: correct",
+        Font = Enum.Font.GothamMedium,
+        TextSize = 10,
+        TextColor3 = Color3.fromRGB(111, 178, 131),
+        TextXAlignment = Enum.TextXAlignment.Center
+    }, Main)
+
+    local Dragging = false
+    local DragInput
+    local DragStart
+    local StartPosition
+
+    local function BeginDrag(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
+        end
+        Dragging = true
+        DragInput = input
+        DragStart = input.Position
+        StartPosition = Main.Position
+    end
+
+    Header.InputBegan:Connect(BeginDrag)
+    Radar.InputBegan:Connect(BeginDrag)
+
+    local DragChangedConnection = UserInputService.InputChanged:Connect(function(input)
+        if not Dragging then
+            return
+        end
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input == DragInput then
+            local delta = input.Position - DragStart
+            Main.Position = UDim2.new(
+                StartPosition.X.Scale,
+                StartPosition.X.Offset + delta.X,
+                StartPosition.Y.Scale,
+                StartPosition.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    local DragEndedConnection = UserInputService.InputEnded:Connect(function(input)
+        if input == DragInput or (input.UserInputType == Enum.UserInputType.MouseButton1 and DragInput and DragInput.UserInputType == Enum.UserInputType.MouseButton1) then
+            Dragging = false
+            DragInput = nil
+        end
+    end)
+
+    local JeffModels = {}
+    local Dots = {}
+
+    local function TrackJeff(obj)
+        if obj:IsA("Model") and obj.Name == "JeffTheKiller" then
+            JeffModels[obj] = true
+        end
+    end
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        TrackJeff(obj)
+    end
+
+    local AddedConnection = workspace.DescendantAdded:Connect(TrackJeff)
+    local RemovedConnection = workspace.DescendantRemoving:Connect(function(obj)
+        JeffModels[obj] = nil
+    end)
+
+    local function GetDot(target)
+        if Dots[target] then
+            return Dots[target]
+        end
+        local dot = Create("Frame", {
+            Name = "RadarDot",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Size = UDim2.fromOffset(7, 7),
+            BackgroundColor3 = Color3.fromRGB(111, 255, 155),
+            BorderSizePixel = 0,
+            ZIndex = 5
+        }, Radar)
+        Create("UICorner", {CornerRadius = UDim.new(1, 0)}, dot)
+        Dots[target] = dot
+        return dot
+    end
+
+    local function UpdateRadar()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local selfHumanoid = char and char:FindFirstChildOfClass("Humanoid")
+        local visible = {}
+        local count = 0
+
+        if root and selfHumanoid and selfHumanoid.Health > 0 then
+            local origin = root.Position
+            local cf = root.CFrame
+
+            local function Plot(target, position)
+                local offset = position - origin
+                local horizontal = Vector3.new(offset.X, 0, offset.Z)
+                local distance = horizontal.Magnitude
+                if distance > RANGE then
+                    return
+                end
+
+                local right = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
+                local forward = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+                local x = horizontal:Dot(right) / RANGE * RADAR_RADIUS
+                local y = -horizontal:Dot(forward) / RANGE * RADAR_RADIUS
+
+                local dot = GetDot(target)
+                dot.Position = UDim2.new(0.5, x, 0.5, y)
+                visible[target] = true
+                count += 1
+            end
+
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    local character = player.Character
+                    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                    local targetRoot = character and character:FindFirstChild("HumanoidRootPart")
+                    if humanoid and humanoid.Health > 0 and targetRoot then
+                        Plot(player, targetRoot.Position)
+                    end
+                end
+            end
+
+            for model in pairs(JeffModels) do
+                if model:IsDescendantOf(workspace) then
+                    local part = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+                    if part then
+                        Plot(model, model:GetPivot().Position)
+                    end
+                else
+                    JeffModels[model] = nil
+                end
+            end
+        end
+
+        for target, dot in pairs(Dots) do
+            if not visible[target] then
+                dot:Destroy()
+                Dots[target] = nil
+            end
+        end
+
+        Status.Text = tostring(count) .. " TARGETS"
+    end
+
+    local SweepTween = TweenService:Create(Sweep, TweenInfo.new(5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1), {Rotation = 360})
+    SweepTween:Play()
+
+    local elapsed = 0
+    local RadarConnection = RunService.Heartbeat:Connect(function(dt)
+        elapsed += dt
+        if elapsed >= 0.1 then
+            elapsed = 0
+            UpdateRadar()
+        end
+    end)
+
+    Gui.Destroying:Connect(function()
+        DragChangedConnection:Disconnect()
+        DragEndedConnection:Disconnect()
+        RadarConnection:Disconnect()
+        AddedConnection:Disconnect()
+        RemovedConnection:Disconnect()
+        SweepTween:Cancel()
+    end)
+
+    UpdateRadar()
+    return Gui
+end
+
+local function stopScanner()
+    local current = radarGui
+    radarGui = nil
+    if current and current.Parent then current:Destroy() end
+    setScanButtonState(false)
+end
+
+connect(scanButton.Activated, function()
+    clickSound()
+    if radarGui and radarGui.Parent then
+        stopScanner()
+        notify("SCAN / Disabled", true)
+        return
+    end
+    local ok, created = pcall(launchScanner)
+    if not ok or not created then
+        local partial = playerGui:FindFirstChild("DeepGreenRadar")
+        if partial then partial:Destroy() end
+        notify("SCAN / Unable to start", false)
+        return
+    end
+    radarGui = created
+    setScanButtonState(true)
+    created.Destroying:Connect(function()
+        if radarGui == created then
+            radarGui = nil
+            setScanButtonState(false)
+        end
+    end)
+    notify("SCAN / Enabled", true)
+end)
+
+featureUI.scanButton = scanButton
+featureStop.scan = stopScanner
+end
+
+do
+local godButton, godDescription, godHeading, godBorder = actionBox(
+    toolsScroll, "06 / PROTECTION", "God Mode",
+    "The damage mechanism in some script modes doesn’t work on the server or certain monsters."
+)
+local godGradient = godButton:FindFirstChildOfClass("UIGradient")
+local godOriginalGradient = godGradient.Color
+local godBorderGradient = godBorder:FindFirstChildOfClass("UIGradient")
+local godEnabled = false
+local godToken = 0
+local characterConnection = nil
+local remoteConnection = nil
+local trackedHumanoids = {}
+local renamedRemotes = setmetatable({}, {__mode = "k"})
+local maxProtectedHealth = 1000000000
+
+local function setGodButtonState(enabled)
+    godGradient.Color = enabled and ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 69, 44)),
+        ColorSequenceKeypoint.new(0.44, Color3.fromRGB(37, 151, 77)),
+        ColorSequenceKeypoint.new(0.72, Color3.fromRGB(22, 116, 65)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 65, 42)),
+    }) or godOriginalGradient
+    godButton.BackgroundTransparency = enabled and 0.01 or 0.11
+    godBorderGradient.Enabled = not enabled
+    godBorder.Color = enabled and Color3.fromRGB(116, 255, 150) or C.gold
+    tween(godBorder, {Thickness = enabled and 2.9 or 2}, 0.2)
+    for _, child in ipairs(godButton:GetChildren()) do
+        if child:IsA("TextLabel") then
+            local gold = child:FindFirstChildOfClass("UIGradient")
+            if gold then gold.Enabled = not enabled end
+            child.TextColor3 = enabled and Color3.fromRGB(230, 255, 230) or C.white
+        end
+    end
+end
+
+local function renameKillRemote(obj)
+    if not godEnabled or not obj:IsA("RemoteEvent") or obj.Name ~= "Kill" then
+        return
+    end
+    local renamed = pcall(function()
+        obj.Name = "KillDEBUGNO"
+    end)
+    if renamed and obj.Name == "KillDEBUGNO" then
+        renamedRemotes[obj] = true
+    end
+end
+
+local function protectHumanoid(humanoid)
+    if not godEnabled or trackedHumanoids[humanoid] then return end
+    local record = {
+        maxHealth = humanoid.MaxHealth,
+        health = humanoid.Health,
+    }
+    trackedHumanoids[humanoid] = record
+
+    local function maintainHealth()
+        if not godEnabled or trackedHumanoids[humanoid] ~= record or not humanoid.Parent then
+            return
+        end
+        if humanoid.MaxHealth ~= maxProtectedHealth then
+            humanoid.MaxHealth = maxProtectedHealth
+        end
+        if humanoid.Health > 0 and humanoid.Health < maxProtectedHealth then
+            humanoid.Health = maxProtectedHealth
+        end
+    end
+
+    record.healthConnection = humanoid.HealthChanged:Connect(maintainHealth)
+    record.maxHealthConnection = humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(maintainHealth)
+    humanoid.MaxHealth = maxProtectedHealth
+    if humanoid.Health > 0 then
+        humanoid.Health = maxProtectedHealth
+    end
+end
+
+local function protectCharacter(character, token)
+    task.spawn(function()
+        local humanoid = character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid", 10)
+        if not godEnabled or token ~= godToken or character ~= player.Character then
+            return
+        end
+        if humanoid then protectHumanoid(humanoid) end
+    end)
+end
+
+local function disableGodMode()
+    godToken = godToken + 1
+    godEnabled = false
+    if characterConnection then
+        characterConnection:Disconnect()
+        characterConnection = nil
+    end
+    if remoteConnection then
+        remoteConnection:Disconnect()
+        remoteConnection = nil
+    end
+
+    for humanoid, record in pairs(trackedHumanoids) do
+        if record.healthConnection then record.healthConnection:Disconnect() end
+        if record.maxHealthConnection then record.maxHealthConnection:Disconnect() end
+        if humanoid.Parent then
+            pcall(function()
+                humanoid.MaxHealth = record.maxHealth
+                if humanoid.Health > 0 then
+                    humanoid.Health = math.clamp(record.health, 0, math.max(record.maxHealth, 0))
+                end
+            end)
+        end
+    end
+    table.clear(trackedHumanoids)
+
+    for remote in pairs(renamedRemotes) do
+        if remote.Parent and remote.Name == "KillDEBUGNO" then
+            pcall(function() remote.Name = "Kill" end)
+        end
+    end
+    table.clear(renamedRemotes)
+    setGodButtonState(false)
+end
+
+connect(godButton.Activated, function()
+    clickSound()
+    if godEnabled then
+        disableGodMode()
+        notify("GOD MODE / Disabled", true)
+        return
+    end
+
+    godEnabled = true
+    godToken = godToken + 1
+    local token = godToken
+    setGodButtonState(true)
+    remoteConnection = ReplicatedStorage.ChildAdded:Connect(renameKillRemote)
+    for _, remote in ipairs(ReplicatedStorage:GetChildren()) do
+        renameKillRemote(remote)
+    end
+    characterConnection = player.CharacterAdded:Connect(function(character)
+        protectCharacter(character, token)
+    end)
+    if player.Character then
+        protectCharacter(player.Character, token)
+    end
+    notify("GOD MODE / Enabled", true)
+end)
+
+featureUI.godButton = godButton
+featureStop.god = disableGodMode
+end
+
+sectionHeader(pages[3], "INTERFACE CONTROL", "03 / VISUAL OPTIONS")
+local motionButton = actionBox(pages[3], "01 / FX", "Motion: ON", "Toggle ambient particles, image drift and animated scanning.")
+local restoreButton = actionBox(pages[3], "02 / LIGHTING", "Restore Lighting", "Disable Night Vision and restore saved lighting values and effects.")
+local settingsNote = label(pages[3], "ALL VISUAL SETTINGS ARE LOCAL TO YOUR CLIENT.", 10, {
+    Size = UDim2.new(1, 0, 0, 24), TextColor3 = C.muted,
+    TextXAlignment = Enum.TextXAlignment.Center,
+})
+
+local function restoreNightVision()
+    if not lightingBackup then return false end
+    if nvBloom and nvBloom.Parent then nvBloom:Destroy() end
+    nvBloom = nil
+    for prop, value in pairs(lightingBackup.values) do
+        pcall(function() Lighting[prop] = value end)
+    end
+    for _, item in ipairs(lightingBackup.atmospheres) do
+        if item.object.Parent then
+            pcall(function()
+                item.object.Density = item.density
+                item.object.Haze = item.haze
+            end)
+        end
+    end
+    for _, effect in ipairs(lightingBackup.removed) do effect.Parent = Lighting end
+    lightingBackup, nightVisionEnabled = nil, false
+    nvDescription.Text = "Illuminate everything"
+    return true
+end
+local function enableNightVision()
+    if nightVisionEnabled then return true end
+    local names = {"GlobalShadows", "Brightness", "ExposureCompensation", "Ambient",
+        "OutdoorAmbient", "FogEnd", "FogColor"}
+    local backup = {values = {}, removed = {}, atmospheres = {}}
+    for _, prop in ipairs(names) do backup.values[prop] = Lighting[prop] end
+    for _, v in ipairs(Lighting:GetChildren()) do
+        if v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") then
+            table.insert(backup.removed, v:Clone())
+        elseif v:IsA("Atmosphere") then
+            table.insert(backup.atmospheres, {object = v, density = v.Density, haze = v.Haze})
+        end
+    end
+    lightingBackup = backup
+    Lighting.GlobalShadows = false
+    Lighting.Brightness = 4
+    Lighting.ExposureCompensation = 0.4
+    Lighting.Ambient = Color3.fromRGB(120, 140, 180)
+    Lighting.OutdoorAmbient = Color3.fromRGB(140, 160, 200)
+    Lighting.FogEnd = 100000
+    Lighting.FogColor = Color3.fromRGB(10, 20, 40)
+    for _, v in ipairs(Lighting:GetChildren()) do
+        if v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") then
+            v:Destroy()
+        elseif v:IsA("Atmosphere") then
+            v.Density = 0.05
+            v.Haze = 0
+        end
+    end
+    nvBloom = Instance.new("BloomEffect")
+    nvBloom.Name = "HardCoreAdminNightVisionBloom"
+    nvBloom.Intensity = 0.25
+    nvBloom.Size = 20
+    nvBloom.Threshold = 1.5
+    nvBloom.Parent = Lighting
+    nightVisionEnabled = true
+    nvDescription.Text = "Illuminate everything"
+    return true
+end
+
+local dexBusy = false
+connect(dexButton.Activated, function()
+    if dexBusy then notify("Dex is already loading...") return end
+    clickSound()
+    dexBusy = true
+    notify("DEX++ / Fetching the latest release...")
+    task.spawn(function()
+        local ok = pcall(function()
+            assert(type(loadstring) == "function", "loadstring is unavailable")
+            loadstring(game:HttpGet("https://github.com/AZYsGithub/DexPlusPlus/releases/latest/download/out.lua"))()
+        end)
+        dexBusy = false
+        if alive and gui.Parent then
+            if ok then notify("DEX++ / Launched successfully", true)
+            else notify("DEX++ / Unable to launch", false) end
+        end
+    end)
+end)
+connect(nvButton.Activated, function()
+    clickSound()
+    local ok = pcall(function()
+        if nightVisionEnabled then restoreNightVision() else enableNightVision() end
+    end)
+    if not ok then
+        notify("NIGHT VISION / Unable to apply", false)
+    else
+        notify(nightVisionEnabled and "NIGHT VISION / Enabled" or "NIGHT VISION / Restored", true)
+    end
+end)
+connect(motionButton.Activated, function()
+    clickSound()
+    animEnabled = not animEnabled
+    for _, child in ipairs(motionButton:GetChildren()) do
+        if child:IsA("TextLabel") and child.Text:find("Motion:") then
+            child.Text = animEnabled and "Motion: ON" or "Motion: OFF"
+        end
+    end
+    if not animEnabled then
+        for _, item in ipairs(animatedImages) do
+            item.picture.Rotation = 0
+            item.scan.Position = UDim2.new(0, 10, 0, 0)
+        end
+        for _, particle in ipairs(particleList) do particle.object.BackgroundTransparency = 1 end
+        mobileIcon.Rotation = 0
+        mobileScale.Scale = 1
+    end
+    notify(animEnabled and "MOTION FX / Enabled" or "MOTION FX / Disabled")
+end)
+connect(restoreButton.Activated, function()
+    clickSound()
+    if restoreNightVision() then notify("LIGHTING / Restored", true)
+    else notify("LIGHTING / Already at saved default") end
+end)
+
+local function layout()
+    if not alive then return end
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+    local w, h = camera.ViewportSize.X, camera.ViewportSize.Y
+    if w < 1 or h < 1 then return end
+    local mobile = (UIS.TouchEnabled and (not UIS.KeyboardEnabled or w < 820)) or w < 670
+    mobileIcon.Visible = UIS.TouchEnabled and phase == "closed"
+    mobileIcon.Size = UDim2.fromOffset(mobile and 49 or 53, mobile and 49 or 53)
+    mobileIcon.Position = UDim2.new(1, -18, 0, mobile and 58 or 64)
+    local pw = math.min(w - (mobile and 22 or 75), mobile and 470 or 910)
+    local ph = math.min(h - (mobile and 58 or 70), mobile and 675 or 645)
+    panel.Size = UDim2.fromOffset(math.max(260, pw), math.max(320, ph))
+    outerHalo.Size, goldEdge.Size = panel.Size, panel.Size
+    local headHeight = mobile and 79 or 95
+    local footerHeight = mobile and 37 or 44
+    header.Size = UDim2.new(1, 0, 0, headHeight)
+    title.Position, title.TextSize = UDim2.fromOffset(19, mobile and 12 or 16), mobile and 19 or 28
+    title.Size = UDim2.new(1, mobile and -118 or -154, 0, 32)
+    subtitle.Position = UDim2.fromOffset(21, mobile and 43 or 52)
+    subtitle.TextSize = mobile and 8 or 10
+    close.Size = UDim2.fromOffset(mobile and 34 or 34, mobile and 34 or 34)
+    close.Position = UDim2.new(1, -48, 0, mobile and 13 or 22)
+    back.Position = UDim2.new(1, mobile and -134 or -150, 0, mobile and 15 or 24)
+    back.Size = UDim2.fromOffset(mobile and 77 or 82, 30)
+    headerRule.Position = UDim2.new(0, 21, 0, headHeight - 6)
+    headerRule.Size = UDim2.new(1, -42, 0, 1)
+    footer.Size = UDim2.new(1, 0, 0, footerHeight)
+    footerText.Text = mobile and "TAP ICON  /  OPEN       •       ×  /  CLOSE" or
+        "L  /  TOGGLE PANEL       •       ESC  /  CLOSE"
+    footerText.TextSize = mobile and 9 or 10
+    pageHolder.Position = UDim2.fromOffset(mobile and 18 or 25, headHeight + 8)
+    pageHolder.Size = UDim2.new(1, mobile and -36 or -50, 1, -(headHeight + footerHeight + 18))
+    toast.Position = UDim2.new(0.5, 0, 1, -(footerHeight + 4))
+    toast.Size = UDim2.fromOffset(math.min(pw - 44, 360), 38)
+
+    local pageW = pw - (mobile and 36 or 50)
+    local pageH = ph - headHeight - footerHeight - 18
+    local startY = mobile and 61 or 69
+    if mobile then
+        local gap = 9
+        local ch = math.max(68, math.min(128, math.floor((pageH - startY - 34 - 2 * gap) / 3)))
+        for i, item in ipairs(categories) do
+            item.button.Position = UDim2.fromOffset(2, startY + (i - 1) * (ch + gap))
+            item.button.Size = UDim2.fromOffset(pageW - 4, ch)
+            item.title.TextSize = 20
+            item.title.Position = UDim2.new(0, 14, 1, -30)
+            item.detail.TextSize = 10
+        end
+    else
+        local gap = 14
+        local cw = (pageW - 2 * gap - 4) / 3
+        local ch = math.max(130, math.min(320, pageH - startY - 52))
+        for i, item in ipairs(categories) do
+            item.button.Position = UDim2.fromOffset(2 + (i - 1) * (cw + gap), startY)
+            item.button.Size = UDim2.fromOffset(cw, ch)
+            item.title.TextSize = 23
+            item.detail.TextSize = 11
+        end
+    end
+    local top = 72
+    if mobile then
+        local available = pageH - top - 37
+        local g = 11
+        local ch = math.max(70, math.min(158, (available - g) / 2))
+        local toolHeight = math.max(92, math.min(142, math.floor((pageH - 94) / 2)))
+        local toolButtons = {dexButton, nvButton, featureUI.flyButton, featureUI.healthButton, featureUI.scanButton, featureUI.godButton}
+        for i, btn in ipairs(toolButtons) do
+            btn.Position = UDim2.fromOffset(2, 6 + (i - 1) * (toolHeight + g))
+            btn.Size = UDim2.fromOffset(pageW - 9, toolHeight)
+        end
+        local toolBottom = 6 + toolHeight * #toolButtons + g * (#toolButtons - 1)
+        toolsNote.Position = UDim2.fromOffset(4, toolBottom + 9)
+        toolsScroll.CanvasSize = UDim2.fromOffset(0, toolBottom + 48)
+        for i, btn in ipairs({motionButton, restoreButton}) do
+            btn.Position = UDim2.fromOffset(2, top + (i - 1) * (ch + g))
+            btn.Size = UDim2.fromOffset(pageW - 4, ch)
+        end
+        local overviewHeight = math.max(114, math.min(148, math.floor((pageH - 90) / 3)))
+        local xrayButtons = {featureUI.keyButton, featureUI.doorButton, featureUI.jeffButton, featureUI.monsterButton, featureUI.deleteScreechButton, featureUI.reminderButton, featureUI.sprintButton}
+        for i, btn in ipairs(xrayButtons) do
+            btn.Position = UDim2.fromOffset(2, 6 + (i - 1) * (overviewHeight + g))
+            btn.Size = UDim2.fromOffset(pageW - 9, overviewHeight)
+        end
+        overviewScroll.CanvasSize = UDim2.fromOffset(0, overviewHeight * #xrayButtons + g * (#xrayButtons - 1) + 16)
+        featureUI.jeffHeading.TextSize = math.min(21, math.max(17, math.floor((pageW - 30) / 12)))
+        featureUI.monsterHeading.TextSize = 22
+        featureUI.deleteScreechHeading.TextSize = 22
+        featureUI.reminderHeading.TextSize = 22
+        featureUI.sprintHeading.TextSize = 22
+        settingsNote.Position = UDim2.fromOffset(0, math.min(pageH - 24, top + ch * 2 + g + 11))
+    else
+        local g = 15
+        local cw = (pageW - g - 4) / 2
+        local ch = math.max(130, math.min(238, pageH - 142))
+        local toolColumns = 2
+        local toolWidth = (pageW - g * (toolColumns - 1) - 8) / toolColumns
+        local toolHeight = math.max(122, math.min(160, math.floor((pageH - 112 - 2 * g) / 3)))
+        local toolButtons = {dexButton, nvButton, featureUI.flyButton, featureUI.healthButton, featureUI.scanButton, featureUI.godButton}
+        for i, btn in ipairs(toolButtons) do
+            local col = (i - 1) % toolColumns
+            local row = math.floor((i - 1) / toolColumns)
+            btn.Position = UDim2.fromOffset(2 + col * (toolWidth + g), 6 + row * (toolHeight + g))
+            btn.Size = UDim2.fromOffset(toolWidth, toolHeight)
+        end
+        local toolRows = math.ceil(#toolButtons / toolColumns)
+        local toolBottom = 6 + toolHeight * toolRows + g * (toolRows - 1)
+        toolsNote.Position = UDim2.fromOffset(4, toolBottom + 9)
+        toolsScroll.CanvasSize = UDim2.fromOffset(0, toolBottom + 48)
+        for i, btn in ipairs({motionButton, restoreButton}) do
+            btn.Position = UDim2.fromOffset(2 + (i - 1) * (cw + g), top)
+            btn.Size = UDim2.fromOffset(cw, ch)
+        end
+        local xrayGap = 13
+        local xrayWidth = (pageW - xrayGap - 8) / 2
+        local scrollHeight = pageH - 73
+        local xrayHeight = math.max(130, math.min(202, math.floor((scrollHeight - xrayGap - 16) / 2)))
+        local xrayButtons = {featureUI.keyButton, featureUI.doorButton, featureUI.jeffButton, featureUI.monsterButton, featureUI.deleteScreechButton, featureUI.reminderButton, featureUI.sprintButton}
+        local xrayRows = math.ceil(#xrayButtons / 2)
+        for i, btn in ipairs(xrayButtons) do
+            local col = (i - 1) % 2
+            local row = math.floor((i - 1) / 2)
+            btn.Position = UDim2.fromOffset(2 + col * (xrayWidth + xrayGap), 6 + row * (xrayHeight + xrayGap))
+            btn.Size = UDim2.fromOffset(xrayWidth, xrayHeight)
+        end
+        overviewScroll.CanvasSize = UDim2.fromOffset(0, xrayHeight * xrayRows + xrayGap * (xrayRows - 1) + 16)
+        featureUI.jeffHeading.TextSize = math.max(17, math.min(23, math.floor(xrayWidth / 13)))
+        featureUI.monsterHeading.TextSize = math.max(19, math.min(23, math.floor(xrayWidth / 13)))
+        featureUI.deleteScreechHeading.TextSize = math.max(19, math.min(23, math.floor(xrayWidth / 13)))
+        featureUI.reminderHeading.TextSize = math.max(17, math.min(23, math.floor(xrayWidth / 14)))
+        featureUI.sprintHeading.TextSize = math.max(19, math.min(23, math.floor(xrayWidth / 13)))
+        settingsNote.Position = UDim2.fromOffset(0, top + ch + 18)
+    end
+end
+
+local function resetLanding()
+    currentPage = 0
+    switching = false
+    back.Visible = false
+    for index, page in pairs(pages) do
+        page.Visible = index == 0
+        page.GroupTransparency = index == 0 and 0 or 1
+        page.Position = UDim2.fromOffset(0, 0)
+    end
+end
+local function navigate(index)
+    if phase ~= "open" or switching or currentPage == index then return end
+    switching = true
+    clickSound()
+    local from = pages[currentPage]
+    local into = pages[index]
+    local direction = index == 0 and -1 or 1
+    into.Visible = true
+    into.Position = UDim2.fromOffset(direction * 48, 0)
+    into.GroupTransparency = 1
+    tween(from, {Position = UDim2.fromOffset(-direction * 34, 0), GroupTransparency = 1}, 0.22)
+    tween(into, {Position = UDim2.fromOffset(0, 0), GroupTransparency = 0}, 0.39,
+        Enum.EasingStyle.Quint, easeOut)
+    currentPage = index
+    back.Visible = index ~= 0
+    local token = stateToken
+    task.delay(0.4, function()
+        if not alive or token ~= stateToken then return end
+        from.Visible = false
+        from.Position = UDim2.fromOffset(0, 0)
+        switching = false
+    end)
+end
+for i, item in ipairs(categories) do
+    connect(item.button.Activated, function() navigate(i) end)
+end
+connect(back.Activated, function() navigate(0) end)
+
+local function openPanel()
+    if phase == "open" or phase == "opening" then return end
+    stateToken = stateToken + 1
+    local token = stateToken
+    phase = "opening"
+    resetLanding()
+    layout()
+    dim.Visible = true
+    fx.Visible = true
+    panel.Visible = true
+    outerHalo.Visible, goldEdge.Visible = true, true
+    mobileIcon.Visible = false
+    unlockCursor()
+    panel.Position = UDim2.fromScale(0.5, 0.56)
+    outerHalo.Position, goldEdge.Position = panel.Position, panel.Position
+    panel.GroupTransparency = 1
+    panelScale.Scale, outerHaloScale.Scale, goldEdgeScale.Scale = 0.88, 0.88, 0.88
+    outerHaloStroke.Transparency, goldEdgeStroke.Transparency = 1, 1
+    tween(dim, {BackgroundTransparency = 0.59}, 0.38)
+    tween(panel, {Position = UDim2.fromScale(0.5, 0.5), GroupTransparency = 0}, 0.55,
+        Enum.EasingStyle.Back, easeOut)
+    tween(panelScale, {Scale = 1}, 0.5, Enum.EasingStyle.Quint, easeOut)
+    tween(outerHalo, {Position = UDim2.fromScale(0.5, 0.5)}, 0.55, Enum.EasingStyle.Back, easeOut)
+    tween(goldEdge, {Position = UDim2.fromScale(0.5, 0.5)}, 0.55, Enum.EasingStyle.Back, easeOut)
+    tween(outerHaloScale, {Scale = 1}, 0.5, Enum.EasingStyle.Quint, easeOut)
+    tween(goldEdgeScale, {Scale = 1}, 0.5, Enum.EasingStyle.Quint, easeOut)
+    tween(outerHaloStroke, {Transparency = 0.73}, 0.45)
+    tween(goldEdgeStroke, {Transparency = 0.08}, 0.45)
+    task.delay(0.56, function()
+        if alive and stateToken == token then phase = "open" end
+    end)
+end
+local function closePanel()
+    if phase == "closed" or phase == "closing" then return end
+    stateToken = stateToken + 1
+    local token = stateToken
+    phase = "closing"
+    switching = false
+    toast.Visible = false
+    tween(dim, {BackgroundTransparency = 1}, 0.33)
+    tween(panel, {Position = UDim2.fromScale(0.5, 0.56), GroupTransparency = 1},
+        0.31, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    tween(panelScale, {Scale = 0.91}, 0.31, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    tween(outerHalo, {Position = UDim2.fromScale(0.5, 0.56)}, 0.31,
+        Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    tween(goldEdge, {Position = UDim2.fromScale(0.5, 0.56)}, 0.31,
+        Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    tween(outerHaloScale, {Scale = 0.91}, 0.31, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    tween(goldEdgeScale, {Scale = 0.91}, 0.31, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    tween(outerHaloStroke, {Transparency = 1}, 0.28)
+    tween(goldEdgeStroke, {Transparency = 1}, 0.28)
+    task.delay(0.34, function()
+        if not alive or token ~= stateToken then return end
+        phase = "closed"
+        restoreCursor()
+        panel.Visible = false
+        outerHalo.Visible, goldEdge.Visible = false, false
+        dim.Visible = false
+        fx.Visible = false
+        layout()
+    end)
+end
+local function togglePanel()
+    clickSound()
+    if phase == "open" or phase == "opening" then closePanel() else openPanel() end
+end
+connect(close.Activated, function() clickSound(); closePanel() end)
+connect(dim.Activated, function() clickSound(); closePanel() end)
+connect(mobileIcon.Activated, function() clickSound(); openPanel() end)
+connect(UIS.InputBegan, function(input, processed)
+    if processed or UIS:GetFocusedTextBox() then return end
+    if input.KeyCode == Enum.KeyCode.L then togglePanel()
+    elseif input.KeyCode == Enum.KeyCode.Escape then closePanel() end
+end)
+connect(close.MouseEnter, function() tween(close, {BackgroundColor3 = Color3.fromRGB(135, 81, 62)}, 0.18) end)
+connect(close.MouseLeave, function() tween(close, {BackgroundColor3 = Color3.fromRGB(80, 63, 50)}, 0.18) end)
+connect(mobileIcon.MouseEnter, function() tween(mobileScale, {Scale = 1.12}, 0.16) end)
+connect(mobileIcon.MouseLeave, function() tween(mobileScale, {Scale = 1}, 0.16) end)
+
+local elapsed, acc = 0, 0
+connect(RS.RenderStepped, function(dt)
+    if not alive or not animEnabled then return end
+    elapsed, acc = elapsed + dt, acc + dt
+    if acc < 1 / 30 then return end
+    acc = acc % (1 / 30)
+    if mobileIcon.Visible then
+        mobileScale.Scale = 1 + math.sin(elapsed * 2.4) * 0.052
+        mobileIcon.Rotation = math.sin(elapsed * 1.45) * 2.4
+        mobileBorderGrad.Rotation = (elapsed * 33) % 360
+    end
+    if not panel.Visible then return end
+    panelBorderGrad.Rotation = (elapsed * 18) % 360
+    outerHaloGradient.Rotation = (elapsed * 14) % 360
+    goldEdgeGradient.Rotation = (elapsed * 18 + 34) % 360
+    cursorGradient.Rotation = (elapsed * 55) % 360
+    panelGradient.Rotation = 112 + math.sin(elapsed * 0.34) * 8
+    for i, gr in ipairs(titleGradients) do
+        if gr.Parent then gr.Rotation = math.sin(elapsed * 0.47 + i * 0.35) * 12 end
+    end
+    for i, gr in ipairs(borderGradients) do
+        if gr.Parent then gr.Rotation = (elapsed * 14 + i * 38) % 360 end
+    end
+    for _, pic in ipairs(animatedImages) do
+        pic.picture.Rotation = math.sin(elapsed * 0.72 + pic.index) * 1.55
+        pic.picture.Position = UDim2.fromScale(-0.065 + math.sin(elapsed * 0.3 + pic.index) * 0.012,
+            -0.065 + math.cos(elapsed * 0.33 + pic.index) * 0.012)
+        pic.scan.Position = UDim2.new(0, 10, (elapsed * 0.18 + pic.index * 0.21) % 1, 0)
+    end
+    for _, particle in ipairs(particleList) do
+        local p = particle.object
+        p.Position = UDim2.new(particle.x, math.sin(elapsed * 0.4 + particle.phase) * 9,
+            (particle.y - elapsed * particle.speed) % 1, 0)
+        p.BackgroundTransparency = 0.40 + math.sin(elapsed + particle.phase) * 0.15
+    end
+end)
+
+local camera = workspace.CurrentCamera
+if camera then connect(camera:GetPropertyChangedSignal("ViewportSize"), layout) end
+connect(workspace:GetPropertyChangedSignal("CurrentCamera"), function()
+    layout()
+end)
+
+local cleaning = false
+local function cleanup()
+    if cleaning then return end
+    cleaning, alive = true, false
+    restoreCursor()
+    RS:UnbindFromRenderStep(cursorStepName)
+    restoreNightVision()
+    featureStop.key()
+    featureStop.door()
+    featureStop.jeff()
+    featureStop.monster()
+    featureStop.reminder()
+    featureStop.health()
+    featureStop.scan()
+    featureStop.god()
+    for _, c in ipairs(connections) do c:Disconnect() end
+    for _, t in pairs(activeTweens) do t:Cancel() end
+    table.clear(connections)
+    table.clear(activeTweens)
+end
+connect(shutdown.Event, cleanup)
+connect(gui.Destroying, cleanup)
+
+layout()
