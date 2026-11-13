@@ -1,21 +1,27 @@
 #Requires -Version 5.1
 <#
-  mirror.ps1 — 把 Hardcore Modes hub 依赖的全部资源，从 Zero0Star 的 GitHub 拉到本地
+  mirror.ps1 -- pull every asset the Hardcore Modes hub needs from Zero0Star's GitHub
+                into a local folder, so you can host them yourself.
 
-  为什么需要：hub 运行时只做两件事 —— 从 pastefy 取自己，从
-  raw.githubusercontent.com/Zero0Star/<repo>/master/*.lua 取模式数据。
-  资源在他账号下，他删库 / 改私 / 被封，你这套就废了。镜像一份到你自己的仓库，
-  然后 loader 会把所有 Zero0Star 的 URL 改写成你自己的，你就彻底独立，可以自己当房主。
+  Why: the hub fetches its mode data from
+      raw.githubusercontent.com/Zero0Star/<repo>/master/*.lua
+  Those files live under his account. If he deletes the repo, makes it private or
+  his GitHub goes away, your setup dies with it. Mirror them once, push them to
+  your own repo, and loader.lua rewrites every Zero0Star URL to your copy.
 
-  用法：
+  Usage:
       powershell -ExecutionPolicy Bypass -File .\hardcore-modes\mirror.ps1
       powershell -ExecutionPolicy Bypass -File .\hardcore-modes\mirror.ps1 -IncludeHub
       powershell -ExecutionPolicy Bypass -File .\hardcore-modes\mirror.ps1 -WithAudio
       powershell -ExecutionPolicy Bypass -File .\hardcore-modes\mirror.ps1 -Verify
 
-  -IncludeHub  额外抓 hub 本体（pastefy 那份）存成 HARDCORE-Modes.lua
-  -WithAudio   额外抓 mp3（RipperNewSound / RipperMPSound，几十 MB，可选）
-  -Verify      只检查本地文件是否齐全，不联网
+  -IncludeHub   also grab the hub source itself from pastefy -> HARDCORE-Modes.lua
+  -WithAudio    also grab the mp3 set (RipperNewSound / RipperMPSound, tens of MB)
+  -Verify       local files only, no network
+  -Pad          target folder (default D:\DSH ROBLOX\hardcore-modes\assets)
+
+  NOTE: keep this file ASCII-only. Windows PowerShell 5.1 reads .ps1 as ANSI, so
+  UTF-8 Chinese text inside it can break the parser with "UnexpectedToken".
 #>
 [CmdletBinding()]
 param(
@@ -28,19 +34,25 @@ param(
 $ErrorActionPreference = 'Stop'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
+$wc = New-Object System.Net.WebClient
+$wc.Headers.Add('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) mirror.ps1')
+$wc.Proxy = [System.Net.WebRequest]::DefaultWebProxy
+
 function Write-Step($m) { Write-Host "[..] $m" -ForegroundColor DarkCyan }
 function Write-Ok($m) { Write-Host "[ok] $m" -ForegroundColor Green }
 function Write-Warn2($m) { Write-Host "[!!] $m" -ForegroundColor Yellow }
 
-# raw.githubusercontent.com 在国内经常被污染，按成功率排序
+# raw.githubusercontent.com is often DNS-poisoned in CN -> a bad address hangs until
+# timeout. jsDelivr first because it answers fast; raw is the last resort.
 $Bases = @(
-    'https://raw.githubusercontent.com/Zero0Star/{0}/master/{1}',
     'https://fastly.jsdelivr.net/gh/Zero0Star/{0}@master/{1}',
-    'https://ghfast.top/https://raw.githubusercontent.com/Zero0Star/{0}/master/{1}',
-    'https://gcore.jsdelivr.net/gh/Zero0Star/{0}@master/{1}'
+    'https://gcore.jsdelivr.net/gh/Zero0Star/{0}@master/{1}',
+    'https://cdn.jsdelivr.net/gh/Zero0Star/{0}@master/{1}',
+    'https://raw.githubusercontent.com/Zero0Star/{0}/master/{1}',
+    'https://ghfast.top/https://raw.githubusercontent.com/Zero0Star/{0}/master/{1}'
 )
 
-# 仓库 / 文件名（来自 hub 的 const 表和 jsDelivr 清单，全部实测存在）
+# Repo / file pairs taken from the hub's const table and jsDelivr's file listing.
 $Files = @(
     @{ Repo = 'Importantstuff'; Name = 'ARCHIVESITEM.lua' },
     @{ Repo = 'Importantstuff'; Name = 'ArchivesLua.lua' },
@@ -106,23 +118,30 @@ foreach ($f in $Files) {
     }
 
     $done = $false
+    $lastErr = ''
     foreach ($tpl in $Bases) {
         $url = $tpl -f $f.Repo, $f.Name
         try {
-            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 90
-            if ($resp.StatusCode -eq 200 -and $resp.RawContentLength -gt 512) {
-                [System.IO.File]::WriteAllBytes($dest, $resp.Content)
-                Write-Ok ("{0} <- {1} ({2:N0} B)" -f $f.Name, ([Uri]$url).Host, (Get-Item -LiteralPath $dest).Length)
+            # WebClient returns a real byte[], Invoke-WebRequest .Content is a String in
+            # PowerShell 5.1 and WriteAllBytes() rejects it -> every file looked "failed".
+            $bytes = $wc.DownloadData($url)
+            if ($bytes -and $bytes.Length -gt 512) {
+                [System.IO.File]::WriteAllBytes($dest, $bytes)
+                Write-Ok ("{0} <- {1} ({2:N0} B)" -f $f.Name, ([Uri]$url).Host, $bytes.Length)
                 $okCount++
                 $done = $true
                 break
             }
+            $lastErr = "too small ($($bytes.Length) B)"
         }
-        catch { }
+        catch {
+            $lastErr = $_.Exception.Message
+            if ($lastErr.Length -gt 90) { $lastErr = $lastErr.Substring(0, 90) }
+        }
     }
     if (-not $done) {
         $fail += $f.Name
-        Write-Warn2 "$($f.Name) failed on every mirror"
+        Write-Warn2 ("{0} failed: {1}" -f $f.Name, $lastErr)
     }
 }
 
@@ -134,14 +153,18 @@ if ($IncludeHub) {
     )
     foreach ($u in $hubUrls) {
         try {
-            $r = Invoke-WebRequest -Uri $u -UseBasicParsing -TimeoutSec 90
-            if ($r.RawContentLength -gt 4000) {
-                [System.IO.File]::WriteAllBytes($hubDest, $r.Content)
-                Write-Ok ("hub source <- {0} ({1:N0} B)" -f ([Uri]$u).Host, (Get-Item -LiteralPath $hubDest).Length)
+            $bytes = $wc.DownloadData($u)
+            if ($bytes -and $bytes.Length -gt 4000) {
+                [System.IO.File]::WriteAllBytes($hubDest, $bytes)
+                Write-Ok ("hub source <- {0} ({1:N0} B)" -f ([Uri]$u).Host, $bytes.Length)
                 break
             }
         }
-        catch { Write-Warn2 "hub source failed: $u" }
+        catch {
+            $msg = $_.Exception.Message
+            if ($msg.Length -gt 90) { $msg = $msg.Substring(0, 90) }
+            Write-Warn2 ("hub source failed: {0} ({1})" -f ([Uri]$u).Host, $msg)
+        }
     }
 }
 
@@ -152,5 +175,4 @@ if ($fail.Count) {
     Write-Host ("failed   : {0}" -f ($fail -join ', ')) -ForegroundColor Yellow
 }
 Write-Host ''
-Write-Host '下一步：powershell -ExecutionPolicy Bypass -File "D:\DSH ROBLOX\github\push.ps1"' -ForegroundColor Cyan
-Write-Host '推完之后 loader 会自动把这些资源改写成读你自己的仓库。' -ForegroundColor Cyan
+Write-Host 'next: powershell -ExecutionPolicy Bypass -File "D:\DSH ROBLOX\github\push.ps1"' -ForegroundColor Cyan
