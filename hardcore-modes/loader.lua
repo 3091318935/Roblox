@@ -18,7 +18,7 @@
 
 local CFG = {
 	name = "HardcoreModes",
-	version = "1.1.1",
+	version = "1.1.3",
 
 	minSize = 4000,
 	localFile = "hardcore-modes.lua",
@@ -26,6 +26,8 @@ local CFG = {
 
 	-- ① hub 本体来源，按顺序试
 	sources = {
+		-- GitHub Pages：自己的静态服务器，稳定、不回源被打、不依赖任何代理
+		"https://3091318935.github.io/Roblox/hardcore-modes/HARDCORE-Modes.lua",
 		"https://fastly.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/HARDCORE-Modes.lua",
 		"https://gcore.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/HARDCORE-Modes.lua",
 		"https://pastefy.app/Bf6hbDY4/raw",
@@ -38,6 +40,8 @@ local CFG = {
 	-- 顺序有意义：执行器所在网络 raw.githubusercontent.com 经常被污染/超时，
 	-- 而 jsDelivr 的 fastly 节点基本通，所以 CDN 排前面，raw 只当最后的兜底。
 	assetBases = {
+		-- ★ 第一位是你自己的 Pages 站：GitHub 直出，无 CDN 缓存延迟、无第三方
+		"https://3091318935.github.io/Roblox/hardcore-modes/assets/",
 		"https://fastly.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/assets/",
 		"https://gcore.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/assets/",
 		"https://cdn.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/assets/",
@@ -142,17 +146,48 @@ local function isForeign(url)
 	return false
 end
 
--- 自己的镜像里万一缺了某个文件，就用 jsDelivr 代理原作者的同一个仓库，
--- 而不是回退到 raw.githubusercontent.com（执行器那边经常是超时/污染）。
+-- 任何 github raw 地址都改走 jsDelivr（不只是 Zero0Star）。
+-- 模式文件自己会去拉一堆第三方依赖（实体生成器、成就、贴图…），
+-- 那些仓库一旦改名/删库/DNS 抽风，整段 loadstring 就在第 8 行炸掉。
+local function isRawGithub(url)
+	return string.find(string.lower(url), "raw.githubusercontent.com", 1, true) ~= nil
+end
+
+-- 值不值得拦：自己的目标仓库，或者任何 github raw 地址
+local function interested(url)
+	return isForeign(url) or isRawGithub(url)
+end
+
+-- raw.githubusercontent.com/User/Repo/branch/path  →  jsDelivr 同等地址
+-- 兼容带 refs/heads/<branch>/ 的写法。
 local function cdnify(url)
-	local user, repo, branch, path = url:match(
-		"raw%.githubusercontent%.com/([^/]+)/([^/]+)/([^/]+)/(.+)$"
+	local user, repo, rest = url:match(
+		"raw%.githubusercontent%.com/([^/]+)/([^/]+)/(.+)$"
 	)
-	if not user or not path then return nil end
+	if not user or not rest then return nil end
+
+	local branch, path = rest:match("^refs/heads/([^/]+)/(.+)$")
+	if not branch then
+		branch, path = rest:match("^([^/]+)/(.+)$")
+	end
+	if not branch or not path then return nil end
+
 	return string.format(
 		"https://fastly.jsdelivr.net/gh/%s/%s@%s/%s",
 		user, repo, branch, path
 	)
+end
+
+-- 拉回来的东西到底是不是脚本：CDN 的 404 页、Cloudflare 页都不算
+local function usable(body)
+	if type(body) ~= "string" or #body < 32 then return false end
+	if looksLikeHtml(body) then return false end
+	if body:sub(1, 1) == "<" then return false end
+	if body:find("Couldn't find the requested file", 1, true) then return false end
+	if body:find("Couldn’t find the requested file", 1, true) then return false end
+	if body:find("404: Not Found", 1, true) then return false end
+	if body:find("Package size exceeded", 1, true) then return false end
+	return true
 end
 
 local function fetchAsset(url)
@@ -172,26 +207,30 @@ local function fetchAsset(url)
 		return nil
 	end
 
-	for _, base in ipairs(CFG.assetBases) do
-		local body = rawHttp(base .. name)
-		if type(body) == "string" and #body > 32 and not looksLikeHtml(body) then
-			log("改用镜像资源", name, #body .. "B")
-			resolved[url] = body
-			return body
+	-- ① 自己的仓库镜像（只有 Zero0Star 那些文件我们有对应副本，按文件名匹配）
+	if isForeign(url) then
+		for _, base in ipairs(CFG.assetBases) do
+			local body = rawHttp(base .. name)
+			if usable(body) then
+				log("改用镜像资源", name, #body .. "B")
+				resolved[url] = body
+				return body
+			end
 		end
 	end
 
+	-- ② 其余一律转 jsDelivr 同仓库地址（Vynixu 实体生成器、成就、贴图…）
 	local alt = cdnify(url)
 	if alt then
 		local body = rawHttp(alt)
-		if type(body) == "string" and #body > 32 and not looksLikeHtml(body) then
-			log("镜像缺失，走 CDN 代原作者", name, #body .. "B")
+		if usable(body) then
+			log("走 CDN 代原作者", name, #body .. "B")
 			resolved[url] = body
 			return body
 		end
 	end
 
-	log("镜像里没有，回退原作者", name)
+	log("改不动，回退原地址", name)
 	resolved[url] = false
 	return nil
 end
@@ -208,7 +247,7 @@ local function installRewrite()
 	local oldGet = game.HttpGet
 	if type(oldGet) == "function" then
 		local function newGet(self, url, ...)
-			if type(url) == "string" and isForeign(url) then
+			if type(url) == "string" and interested(url) then
 				local body = fetchAsset(url)
 				if body then return body end
 			end
@@ -233,7 +272,7 @@ local function installRewrite()
 	if type(oldAsync) == "function" then
 		pcall(function()
 			game.HttpGetAsync = function(self, url, ...)
-				if type(url) == "string" and isForeign(url) then
+				if type(url) == "string" and interested(url) then
 					local body = fetchAsset(url)
 					if body then return body end
 				end
@@ -253,7 +292,7 @@ local function installRewrite()
 					local method = getnamecallmethod()
 					if (method == "HttpGet" or method == "HttpGetAsync") and self == game then
 						local url = ...
-						if type(url) == "string" and isForeign(url) then
+						if type(url) == "string" and interested(url) then
 							local body = fetchAsset(url)
 							if body then return body end
 						end
@@ -277,7 +316,7 @@ local function installRewrite()
 				local method = getnamecallmethod()
 				if (method == "HttpGet" or method == "HttpGetAsync") and self == game then
 					local url = ...
-					if type(url) == "string" and isForeign(url) then
+					if type(url) == "string" and interested(url) then
 						local body = fetchAsset(url)
 						if body then return body end
 					end
