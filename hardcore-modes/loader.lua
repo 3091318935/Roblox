@@ -18,7 +18,7 @@
 
 local CFG = {
 	name = "HardcoreModes",
-	version = "1.1.0",
+	version = "1.1.1",
 
 	minSize = 4000,
 	localFile = "hardcore-modes.lua",
@@ -26,17 +26,22 @@ local CFG = {
 
 	-- ① hub 本体来源，按顺序试
 	sources = {
-		"https://pastefy.app/Bf6hbDY4/raw",
-		"https://pastefy.app/Bf6hbDY4/raw?cache=0",
-		"https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/HARDCORE-Modes.lua",
 		"https://fastly.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/HARDCORE-Modes.lua",
+		"https://gcore.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/HARDCORE-Modes.lua",
+		"https://pastefy.app/Bf6hbDY4/raw",
+		"https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/HARDCORE-Modes.lua",
+		"https://pastefy.app/Bf6hbDY4/raw?cache=0",
 	},
 
 	-- ② 你自己的资源目录（mirror.ps1 生成 + push.ps1 上传）
 	rewrite = true,
+	-- 顺序有意义：执行器所在网络 raw.githubusercontent.com 经常被污染/超时，
+	-- 而 jsDelivr 的 fastly 节点基本通，所以 CDN 排前面，raw 只当最后的兜底。
 	assetBases = {
-		"https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/assets/",
 		"https://fastly.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/assets/",
+		"https://gcore.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/assets/",
+		"https://cdn.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/assets/",
+		"https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/assets/",
 		"https://ghfast.top/https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/assets/",
 	},
 
@@ -137,6 +142,19 @@ local function isForeign(url)
 	return false
 end
 
+-- 自己的镜像里万一缺了某个文件，就用 jsDelivr 代理原作者的同一个仓库，
+-- 而不是回退到 raw.githubusercontent.com（执行器那边经常是超时/污染）。
+local function cdnify(url)
+	local user, repo, branch, path = url:match(
+		"raw%.githubusercontent%.com/([^/]+)/([^/]+)/([^/]+)/(.+)$"
+	)
+	if not user or not path then return nil end
+	return string.format(
+		"https://fastly.jsdelivr.net/gh/%s/%s@%s/%s",
+		user, repo, branch, path
+	)
+end
+
 local function fetchAsset(url)
 	if resolved[url] ~= nil then
 		return resolved[url] or nil
@@ -158,6 +176,16 @@ local function fetchAsset(url)
 		local body = rawHttp(base .. name)
 		if type(body) == "string" and #body > 32 and not looksLikeHtml(body) then
 			log("改用镜像资源", name, #body .. "B")
+			resolved[url] = body
+			return body
+		end
+	end
+
+	local alt = cdnify(url)
+	if alt then
+		local body = rawHttp(alt)
+		if type(body) == "string" and #body > 32 and not looksLikeHtml(body) then
+			log("镜像缺失，走 CDN 代原作者", name, #body .. "B")
 			resolved[url] = body
 			return body
 		end
@@ -189,7 +217,15 @@ local function installRewrite()
 		local okAssign = pcall(function() game.HttpGet = newGet end)
 		if okAssign and game.HttpGet == newGet then
 			hooked = true
-			log("改写钩子已装 (game.HttpGet)")
+			log("改写钩子已装 (game.HttpGet 赋值)")
+		elseif type(hookfunction) == "function" then
+			-- 多数现代执行器把 game.HttpGet 设成只读，赋值静默失败，
+			-- 这时必须用 hookfunction 换掉底层 C 闭包。
+			local okHook = pcall(function() hookfunction(oldGet, newGet) end)
+			if okHook then
+				hooked = true
+				log("改写钩子已装 (hookfunction)")
+			end
 		end
 	end
 
@@ -230,6 +266,28 @@ local function installRewrite()
 				hooked = true
 				log("改写钩子已装 (__namecall)")
 			end
+		end
+	end
+
+	-- 方式三：执行器提供的 hookmetamethod（比自己改元表更稳）
+	if not hooked and type(hookmetamethod) == "function" then
+		local okHook = pcall(function()
+			local oldNamecall
+			oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+				local method = getnamecallmethod()
+				if (method == "HttpGet" or method == "HttpGetAsync") and self == game then
+					local url = ...
+					if type(url) == "string" and isForeign(url) then
+						local body = fetchAsset(url)
+						if body then return body end
+					end
+				end
+				return oldNamecall(self, ...)
+			end)
+		end)
+		if okHook then
+			hooked = true
+			log("改写钩子已装 (hookmetamethod)")
 		end
 	end
 
