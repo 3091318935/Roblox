@@ -1,36 +1,50 @@
 --[[
-	Hardcore Modes · 自建启动器 v1.0.0
-	作用：把 pastefy 上那个混淆 hub 包一层，带多源回退 / 防 Cloudflare 挑战页 / 本地缓存，
-	     任何人拿到下面这一行都能开，不依赖你自己电脑。
+	Hardcore Modes — self-hosted loader  v1.1.0
+	------------------------------------------------------------------
+	做三件事：
+	  1. 多源取 hub 本体（pastefy → 你自己的镜像 → 本地缓存 → 剪贴板）
+	  2. 把 hub 里所有指向 Zero0Star 的资源 URL 改写成你自己的仓库
+	     （只要 hardcore-modes/assets/* 存在，就能完全脱离原作者，你自己当房主）
+	  3. 成功才落盘，并暴露 getgenv().HC_MODES 方便重开
 
-	发布：hardcore-modes/loader.lua 推到 GitHub raw，把 <YOUR_LOADER_URL> 换成实际地址。
-	别人（和你自己）用：
-		loadstring(game:HttpGet("<YOUR_LOADER_URL>"))()
+	用法（一行）：
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/loader.lua"))()
 
-	想改源：改 CFG.sources / CFG.mirrors 即可；本地缓存文件名 CFG.localFile。
+	变体：
+		getgenv().HC_FORCE = true          强制重载（默认防重入）
+		getgenv().HC_SKIP_REWRITE = true   不改写资源 URL（直连原作者）
+		getgenv().HC_MODES.rerun()         重跑
 --]]
 
 local CFG = {
-	name      = "HardcoreModes",
-	version   = "1.0.0",
-	minSize   = 4000,                    -- 小于这个字节数一律当失败（挑战页/空响应）
-	localFile = "hardcore-modes.lua",    -- 执行器工作区里的离线备份
-	debug     = true,
+	name = "HardcoreModes",
+	version = "1.1.0",
 
-	-- 主源：官方 paste（unlisted，但 raw 直链对任何人可读）
+	minSize = 4000,
+	localFile = "hardcore-modes.lua",
+	debug = true,
+
+	-- ① hub 本体来源，按顺序试
 	sources = {
 		"https://pastefy.app/Bf6hbDY4/raw",
-		"https://pastefy.app/Bf6hbDY4/raw?cache=0",   -- 绕开部分执行器的 GET 缓存
+		"https://pastefy.app/Bf6hbDY4/raw?cache=0",
+		"https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/HARDCORE-Modes.lua",
+		"https://fastly.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/HARDCORE-Modes.lua",
 	},
 
-	-- 你自己的镜像（强烈建议至少放一个，paste 被删/被限流时还能开）
-	mirrors = {
-		-- "https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/HARDCORE-Modes.lua",
-		-- "https://cdn.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/HARDCORE-Modes.lua",
-		-- "https://ghfast.top/https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/HARDCORE-Modes.lua",
-		-- "https://<你的域名>/s/<id>.lua",
+	-- ② 你自己的资源目录（mirror.ps1 生成 + push.ps1 上传）
+	rewrite = true,
+	assetBases = {
+		"https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/assets/",
+		"https://fastly.jsdelivr.net/gh/3091318935/Roblox@main/hardcore-modes/assets/",
+		"https://ghfast.top/https://raw.githubusercontent.com/3091318935/Roblox/main/hardcore-modes/assets/",
 	},
+
+	-- 只改写这些人的 URL（别动你自己的）
+	foreignHosts = { "zero0star" },
 }
+
+local ENV = (getgenv and getgenv()) or _G
 
 local function log(...)
 	if CFG.debug then
@@ -38,158 +52,273 @@ local function log(...)
 	end
 end
 
--- 通用 HTTP：不同执行器能力不同，挨个试
-local function httpGet(url)
-	local ok, body = pcall(function()
-		return game:HttpGet(url, true)
-	end)
-	if ok and type(body) == "string" and #body > 0 then
-		return body
-	end
-
-	local req = (syn and syn.request)
-		or (http and http.request)
-		or (fluxus and fluxus.request)
-		or http_request
-		or request
-
-	if req then
-		local ok2, res = pcall(function()
-			return req({ Url = url, Method = "GET" })
+----------------------------------------------------------------------
+-- 网络：多实现回退
+----------------------------------------------------------------------
+local function rawHttp(url)
+	if type(game) == "table" or type(game) == "userdata" then
+		local ok, body = pcall(function()
+			return game:HttpGet(url, true)
 		end)
-		if ok2 and type(res) == "table" and type(res.Body) == "string" and #res.Body > 0 then
-			return res.Body
+		if ok and type(body) == "string" and #body > 0 then
+			return body
 		end
 	end
 
+	local requesters = {
+		ENV.syn and ENV.syn.request,
+		ENV.http and ENV.http.request,
+		ENV.fluxus and ENV.fluxus.request,
+		ENV.http_request,
+		ENV.request,
+	}
+	for _, fn in ipairs(requesters) do
+		if type(fn) == "function" then
+			local ok, res = pcall(fn, { Url = url, Method = "GET" })
+			if ok and type(res) == "table" then
+				local body = res.Body or res.body
+				if type(body) == "string" and #body > 0 then
+					return body
+				end
+			end
+		end
+	end
 	return nil
 end
 
--- 判断拿回来的是不是真脚本
+local function looksLikeHtml(s)
+	if type(s) ~= "string" then return false end
+	local head = s:sub(1, 400):lower()
+	return head:find("<!doctype", 1, true) ~= nil
+		or head:find("<html", 1, true) ~= nil
+		or head:find("just a moment", 1, true) ~= nil
+		or head:find("enable javascript", 1, true) ~= nil
+		or head:find("cloudflare", 1, true) ~= nil
+end
+
 local function checkSource(src)
-	if type(src) ~= "string" then return false, "空返回" end
+	if type(src) ~= "string" then return false, "返回空" end
 	if #src < CFG.minSize then return false, "太短(" .. #src .. "B)" end
-	if src:sub(1, 1) == "<" then return false, "HTML 页面" end
-
-	local low = src:lower()
-	if low:find("<!doctype", 1, true)
-		or low:find("just a moment", 1, true)
-		or low:find("enable javascript", 1, true)
-		or low:find("cloudflare", 1, true)
-	then
-		return false, "被盾拦了（挑战页）"
-	end
-
-	if not (low:find("loadstring", 1, true) or low:find("game:", 1, true) or low:find("return", 1, true)) then
+	if src:sub(1, 1) == "<" then return false, "是 HTML" end
+	if looksLikeHtml(src) then return false, "是盾/挑战页" end
+	if not (src:find("loadstring", 1, true) or src:find("game:", 1, true) or src:find("return", 1, true)) then
 		return false, "不像 Lua"
 	end
-
 	return true
 end
 
-local ENV = (getgenv and getgenv()) or _G
-
-if ENV.__HC_MODES_ACTIVE and not ENV.HC_FORCE then
-	log("已经在跑了。要强制重开：getgenv().HC_FORCE = true，再执行一次本 loader")
-	return
-end
-
--- 逐源尝试
-local tried = {}
-local chosen, chosenUrl
-
 local function tryUrl(url, tag)
-	local body = httpGet(url)
-	if not body then
-		tried[#tried + 1] = tag .. " " .. url .. " -> 请求失败"
-		return nil
-	end
+	local body = rawHttp(url)
 	local ok, why = checkSource(body)
-	if not ok then
-		tried[#tried + 1] = tag .. " " .. url .. " -> " .. why
+	if ok then
+		log("源可用(" .. tag .. ")", url)
+		return body
+	end
+	log("源失败(" .. tag .. ")", url, why)
+	return nil
+end
+
+----------------------------------------------------------------------
+-- 资源 URL 改写：把 Zero0Star 的 .lua 换成本地镜像
+----------------------------------------------------------------------
+local resolved = {}
+
+local function assetName(url)
+	local clean = url:gsub("[?#].*$", "")
+	local name = clean:match("([^/]+)$")
+	return name
+end
+
+local function isForeign(url)
+	local low = string.lower(url)
+	for _, h in ipairs(CFG.foreignHosts) do
+		if low:find(h, 1, true) then return true end
+	end
+	return false
+end
+
+local function fetchAsset(url)
+	if resolved[url] ~= nil then
+		return resolved[url] or nil
+	end
+
+	local name = assetName(url)
+	if not name or name == "" then
+		resolved[url] = false
 		return nil
 	end
-	return body
+
+	-- 音视频体积大、数量多，默认放行原地址；只镜像 .lua 和裸数据文件
+	if name:lower():match("%.mp3$") or name:lower():match("%.ogg$") then
+		resolved[url] = false
+		return nil
+	end
+
+	for _, base in ipairs(CFG.assetBases) do
+		local body = rawHttp(base .. name)
+		if type(body) == "string" and #body > 32 and not looksLikeHtml(body) then
+			log("改用镜像资源", name, #body .. "B")
+			resolved[url] = body
+			return body
+		end
+	end
+
+	log("镜像里没有，回退原作者", name)
+	resolved[url] = false
+	return nil
 end
 
-for _, url in ipairs(CFG.sources) do
-	local body = tryUrl(url, "src")
-	if body then
-		chosen, chosenUrl = body, url
-		break
+local function installRewrite()
+	if not CFG.rewrite then return end
+	if ENV.HC_SKIP_REWRITE then return end
+	if ENV.__HC_REWRITE then return end
+	ENV.__HC_REWRITE = true
+
+	local hooked = false
+
+	-- 方式一：直接给 game.HttpGet 赋值（多数执行器允许）
+	local oldGet = game.HttpGet
+	if type(oldGet) == "function" then
+		local function newGet(self, url, ...)
+			if type(url) == "string" and isForeign(url) then
+				local body = fetchAsset(url)
+				if body then return body end
+			end
+			return oldGet(self, url, ...)
+		end
+		local okAssign = pcall(function() game.HttpGet = newGet end)
+		if okAssign and game.HttpGet == newGet then
+			hooked = true
+			log("改写钩子已装 (game.HttpGet)")
+		end
+	end
+
+	local oldAsync = game.HttpGetAsync
+	if type(oldAsync) == "function" then
+		pcall(function()
+			game.HttpGetAsync = function(self, url, ...)
+				if type(url) == "string" and isForeign(url) then
+					local body = fetchAsset(url)
+					if body then return body end
+				end
+				return oldAsync(self, url, ...)
+			end
+		end)
+	end
+
+	-- 方式二：namecall 兜底
+	if not hooked and type(hookmetamethod) == "function" then
+		local mt = getrawmetatable and getrawmetatable(game)
+		if mt and type(mt.__namecall) == "function" then
+			local oldNamecall = mt.__namecall
+			local okHook = pcall(function()
+				if type(setreadonly) == "function" then setreadonly(mt, false) end
+				mt.__namecall = newcclosure(function(self, ...)
+					local method = getnamecallmethod()
+					if (method == "HttpGet" or method == "HttpGetAsync") and self == game then
+						local url = ...
+						if type(url) == "string" and isForeign(url) then
+							local body = fetchAsset(url)
+							if body then return body end
+						end
+					end
+					return oldNamecall(self, ...)
+				end)
+				if type(setreadonly) == "function" then setreadonly(mt, true) end
+			end)
+			if okHook then
+				hooked = true
+				log("改写钩子已装 (__namecall)")
+			end
+		end
+	end
+
+	if not hooked then
+		log("改写钩子装不上，本次直连原作者资源")
 	end
 end
 
-if not chosen then
-	for _, url in ipairs(CFG.mirrors) do
-		local body = tryUrl(url, "mirror")
+----------------------------------------------------------------------
+-- 主流程
+----------------------------------------------------------------------
+local function run()
+	if ENV.__HC_MODES_ACTIVE and not ENV.HC_FORCE then
+		log("已经在运行了；想强开 getgenv().HC_FORCE = true")
+		return nil
+	end
+	ENV.__HC_MODES_ACTIVE = nil
+
+	local chosen, chosenUrl
+
+	for _, url in ipairs(CFG.sources) do
+		local body = tryUrl(url, "hub")
 		if body then
 			chosen, chosenUrl = body, url
 			break
 		end
 	end
-end
 
--- 本地离线备份
-if not chosen and type(readfile) == "function" then
-	local ok, data = pcall(readfile, CFG.localFile)
-	if ok and type(data) == "string" then
-		local good, why = checkSource(data)
-		if good then
-			chosen, chosenUrl = data, "local:" .. CFG.localFile
-		else
-			tried[#tried + 1] = "local -> " .. why
+	if not chosen and type(readfile) == "function" and type(isfile) == "function" then
+		local ok, body = pcall(function()
+			if isfile(CFG.localFile) then return readfile(CFG.localFile) end
+		end)
+		local valid, why = checkSource(ok and body or nil)
+		if valid then
+			chosen, chosenUrl = body, "local:" .. CFG.localFile
+			log("用本地缓存", #body .. "B")
+		elseif ok then
+			log("本地缓存不可用", why)
 		end
 	end
-end
 
--- 剪贴板（手动把脚本全选复制进去也能救急）
-if not chosen and type(getclipboard) == "function" then
-	local ok, data = pcall(getclipboard)
-	if ok and type(data) == "string" then
-		local good, why = checkSource(data)
-		if good then
-			chosen, chosenUrl = data, "clipboard"
-		else
-			tried[#tried + 1] = "clipboard -> " .. why
+	if not chosen and type(getclipboard) == "function" then
+		local ok, body = pcall(getclipboard)
+		local valid = checkSource(ok and body or nil)
+		if valid then
+			chosen, chosenUrl = body, "clipboard"
+			log("用剪贴板", #body .. "B")
 		end
 	end
+
+	if not chosen then
+		warn("[HC] 所有源都失败，hub 没取到。检查网络 / pastefy 是否还在 / 或者先跑 mirror.ps1")
+		return nil
+	end
+
+	installRewrite()
+
+	local chunk, cerr = loadstring(chosen, "=" .. CFG.name)
+	if not chunk then
+		warn("[HC] 编译失败: " .. tostring(cerr))
+		return nil
+	end
+
+	local ok, err = pcall(chunk)
+	ENV.__HC_MODES_ACTIVE = true
+
+	if not ok then
+		warn("[HC] 运行出错: " .. tostring(err))
+		return nil
+	end
+
+	if type(writefile) == "function" then
+		pcall(writefile, CFG.localFile, chosen)
+	end
+
+	local info = {
+		version = CFG.version,
+		source = chosenUrl,
+		bytes = #chosen,
+		rerun = run,
+	}
+	ENV.HC_MODES = info
+
+	print(string.format("[HC %s] 已启动  源=%s  大小=%dB", CFG.version, chosenUrl, #chosen))
+	return info
 end
 
-if not chosen then
-	warn("[HC] 所有源都失败：\n  " .. table.concat(tried, "\n  "))
-	return
-end
-
-local chunk, cerr = loadstring(chosen, "=" .. CFG.name)
-if not chunk then
-	warn("[HC] 编译失败：" .. tostring(cerr) .. "\n源：" .. tostring(chosenUrl))
-	return
-end
-
-ENV.__HC_MODES_ACTIVE = true
-ENV.HC_MODES = {
-	version = CFG.version,
-	source  = chosenUrl,
-	bytes   = #chosen,
-	rerun   = function()
-		ENV.HC_FORCE = true
-		ENV.__HC_MODES_ACTIVE = false
-		return chunk()
-	end,
-}
-
-local ok, err = pcall(chunk)
+local ok, res = pcall(run)
 if not ok then
-	ENV.__HC_MODES_ACTIVE = false
-	warn("[HC] 运行时报错：" .. tostring(err) .. "\n源：" .. tostring(chosenUrl))
-	return
+	warn("[HC] 启动异常: " .. tostring(res))
 end
-
--- 跑通了才落盘，避免把错误页面存成"备份"
-if type(writefile) == "function" then
-	pcall(writefile, CFG.localFile, chosen)
-end
-
-log("已启动", "源=" .. tostring(chosenUrl), "大小=" .. #chosen .. "B",
-	"重开=getgenv().HC_MODES.rerun()")
+return res
