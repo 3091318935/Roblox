@@ -1,5 +1,5 @@
 --[[
-	Hardcore Modes — self-hosted loader  v1.1.0
+	Hardcore Modes — self-hosted loader  v1.1.3
 	------------------------------------------------------------------
 	做三件事：
 	  1. 多源取 hub 本体（pastefy → 你自己的镜像 → 本地缓存 → 剪贴板）
