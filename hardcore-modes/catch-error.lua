@@ -1,23 +1,18 @@
 --[[
-	catch-error.lua —— 抓模式 1/2/3 为什么不动（不联网，直接贴）
+	catch-error.lua v1.1 —— 抓模式 1/2/3 卡在哪
 	==================================================================
-	在原版那个 place 里用。步骤：
-		1) 先注入原版码，面板出来
-		2) 贴这个脚本
-		3) 再点 02 HOTEL（或 01 / 03）
-		4) 看屏幕右下角出现的「捕获」列表，和 F9 里的红字
+	v1.0 的 loadstring 钩子把 PANLT 搞成 C stack overflow，已删。
+	现在只做三件事，全部只读：
+		1) error / warn 钩子（轻量）
+		2) 查 workspace.HardcoreOne 标记是否存在
+		3) 试拉 HOTELLua 第一个 GetObjects 资产，看权限
 
-	它拦三样东西：
-		error()  报的错
-		warn()   警告
-		loadstring 之后每段脚本的运行错误
+	用法：贴进执行器，看左下角那块黑框。
 --]]
 
 local ENV = (getgenv and getgenv()) or _G
-local out = {}
 
 local pg = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
-
 local sg = Instance.new("ScreenGui")
 sg.Name = "HC_Catch"
 sg.ResetOnSpawn = false
@@ -26,8 +21,8 @@ local okH, hui = pcall(function() return gethui and gethui() end)
 sg.Parent = (okH and hui) or pg
 
 local box = Instance.new("Frame")
-box.Size = UDim2.fromOffset(560, 150)
-box.Position = UDim2.new(0, 20, 1, -170)
+box.Size = UDim2.fromOffset(620, 210)
+box.Position = UDim2.new(0, 20, 1, -230)
 box.BackgroundColor3 = Color3.fromRGB(12, 14, 20)
 box.BackgroundTransparency = 0.05
 box.BorderSizePixel = 0
@@ -41,7 +36,7 @@ title.Font = Enum.Font.GothamMedium
 title.TextSize = 12
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.TextColor3 = Color3.fromRGB(214, 178, 96)
-title.Text = "捕获 · 点一下 02 HOTEL 看这里"
+title.Text = "诊断 · 只读"
 title.Parent = box
 
 local list = Instance.new("TextLabel")
@@ -53,66 +48,64 @@ list.TextSize = 11
 list.TextWrapped = true
 list.TextXAlignment = Enum.TextXAlignment.Left
 list.TextYAlignment = Enum.TextYAlignment.Top
-list.TextColor3 = Color3.fromRGB(240, 160, 160)
+list.TextColor3 = Color3.fromRGB(220, 220, 220)
 list.Text = ""
 list.Parent = box
 
+local out = {}
 local function push(tag, text)
 	local s = tostring(text)
-	if #s > 300 then s = s:sub(1, 300) .. "…" end
-	table.insert(out, 1, "[" .. tag .. "] " .. s)
-	while #out > 9 do table.remove(out) end
+	if #s > 320 then s = s:sub(1, 320) .. "…" end
+	table.insert(out, "[" .. tag .. "] " .. s)
+	while #out > 11 do table.remove(out, 1) end
 	list.Text = table.concat(out, "\n")
-	print("[CATCH][" .. tag .. "]", text)
+	print("[DIAG][" .. tag .. "]", text)
 end
 
--- ① error
-local okE, oldError = pcall(function() return error end)
-if type(hookfunction) == "function" and okE then
-	pcall(function()
-		hookfunction(error, function(msg, level)
-			push("error", msg)
-			return oldError(msg, level)
-		end)
+-- ① 标记检查：HardCoreOne / HardcoreOne 一旦存在，HOTELLua 第 1 行就直接 return
+for _, n in ipairs({ "HardcoreOne", "HardCoreOne", "HardcoreITEM", "HardCoreSound" }) do
+	push("mark", n .. " = " .. (workspace:FindFirstChild(n) and "有" or "无"))
+end
+
+-- ② 资产权限：HOTELLua.lua:57 就是靠这个 id 起头，拉不到会死循环
+task.spawn(function()
+	local id = "83840759413024"
+	local ok, a, b = pcall(function()
+		local objs = game:GetObjects("rbxassetid://" .. id)
+		return #objs, (objs[1] and objs[1].Name) or "?"
 	end)
-end
+	if ok then
+		push("asset", "GetObjects " .. id .. " OK  数量=" .. tostring(a) .. " 名字=" .. tostring(b))
+	else
+		push("asset", "GetObjects " .. id .. " 失败: " .. tostring(a))
+	end
+end)
 
--- ② warn
+-- ③ error / warn
 if type(hookfunction) == "function" then
-	pcall(function()
-		local oldWarn = warn
-		hookfunction(warn, function(...)
-			local t = {}
-			for i = 1, select("#", ...) do t[i] = tostring((select(i, ...))) end
-			push("warn", table.concat(t, " "))
-			return oldWarn(...)
+	local okE, oldError = pcall(function() return error end)
+	if okE then
+		pcall(function()
+			hookfunction(error, function(msg, level)
+				push("error", msg)
+				return oldError(msg, level)
+			end)
 		end)
-	end)
+	end
+	local okW, oldWarn = pcall(function() return warn end)
+	if okW then
+		pcall(function()
+			hookfunction(warn, function(...)
+				local t = {}
+				for i = 1, select("#", ...) do t[i] = tostring((select(i, ...))) end
+				push("warn", table.concat(t, " "))
+				return oldWarn(...)
+			end)
+		end)
+	end
 end
 
--- ③ loadstring 之后的运行错误
-if type(hookfunction) == "function" and type(loadstring) == "function" then
-	pcall(function()
-		local oldLoad = loadstring
-		hookfunction(loadstring, function(src, name)
-			local fn, err = oldLoad(src, name)
-			if not fn then
-				push("compile", tostring(err))
-				return fn, err
-			end
-			return function(...)
-				local r = { pcall(fn, ...) }
-				if not r[1] then
-					push("runtime", tostring(r[2]))
-					return nil
-				end
-				return table.unpack(r, 2)
-			end
-		end)
-	end)
-end
-
--- ④ 顺手看一眼信号连接数
+-- ④ 连接数
 task.delay(1, function()
 	local RS = game:GetService("ReplicatedStorage")
 	local gd = RS:FindFirstChild("GameData")
@@ -120,11 +113,12 @@ task.delay(1, function()
 	if lr and type(getconnections) == "function" then
 		local ok, conns = pcall(getconnections, lr.Changed)
 		if ok and type(conns) == "table" then
-			push("info", "LatestRoom.Changed 连接数 = " .. #conns)
+			push("conn", "LatestRoom.Changed 连接数 = " .. #conns)
 		end
 	end
+	push("conn", "LatestRoom 当前值 = " .. tostring(lr and lr.Value))
 end)
 
-print("[CATCH] 已挂上。现在去面板点 02 HOTEL，然后看屏幕左下和 F9")
-ENV.HC_CATCH = out
+ENV.HC_DIAG = out
+push("info", "把上面这些发我；点 02 HOTEL 若出现红字也发我")
 return out
