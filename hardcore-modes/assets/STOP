@@ -1,0 +1,2327 @@
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local CF = Font.new("rbxassetid://12187375194", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+local InterfaceFont = Font.new("rbxassetid://11702779517", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+local RecommendFont = InterfaceFont
+local SG = Instance.new("ScreenGui")
+SG.Name = "HardCorePopup"
+SG.ResetOnSpawn = false
+SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+SG.IgnoreGuiInset = false
+SG.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+SG.Enabled = false
+SG.Parent = playerGui
+local loadingGui = Instance.new("ScreenGui")
+loadingGui.Name = "HardCoreGildedLoading"
+loadingGui.ResetOnSpawn = false
+loadingGui.IgnoreGuiInset = true
+loadingGui.ScreenInsets = Enum.ScreenInsets.None
+loadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+loadingGui.DisplayOrder = SG.DisplayOrder + 50
+loadingGui.Parent = playerGui
+local loadingLabel = Instance.new("TextLabel")
+loadingLabel.Name = "GildedLoadingText"
+loadingLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+loadingLabel.Position = UDim2.fromScale(0.5, 0.5)
+loadingLabel.Size = UDim2.new(0.9, 0, 0, 84)
+loadingLabel.BackgroundTransparency = 1
+loadingLabel.FontFace = CF
+loadingLabel.Text = "Loading..."
+loadingLabel.TextScaled = true
+loadingLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+loadingLabel.TextXAlignment = Enum.TextXAlignment.Center
+loadingLabel.Parent = loadingGui
+local loadingTextLimit = Instance.new("UITextSizeConstraint")
+loadingTextLimit.MinTextSize = 18
+loadingTextLimit.MaxTextSize = 46
+loadingTextLimit.Parent = loadingLabel
+local loadingTextStroke = Instance.new("UIStroke")
+loadingTextStroke.Color = Color3.fromRGB(108, 76, 37)
+loadingTextStroke.Thickness = 1.5
+loadingTextStroke.Transparency = 0.24
+loadingTextStroke.Parent = loadingLabel
+local loadingGoldGradient = Instance.new("UIGradient")
+loadingGoldGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(108, 76, 37)),
+    ColorSequenceKeypoint.new(0.28, Color3.fromRGB(225, 180, 94)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 235, 189)),
+    ColorSequenceKeypoint.new(0.72, Color3.fromRGB(225, 180, 94)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(108, 76, 37)),
+})
+loadingGoldGradient.Rotation = 0
+loadingGoldGradient.Offset = Vector2.new(-0.25, 0)
+loadingGoldGradient.Parent = loadingLabel
+TweenService:Create(loadingGoldGradient,
+    TweenInfo.new(1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+    {Offset = Vector2.new(0.25, 0)}):Play()
+local loadingDismissed = false
+local function dismissGildedLoading()
+    if loadingDismissed or not loadingGui.Parent then return end
+    loadingDismissed = true
+    TweenService:Create(loadingLabel, TweenInfo.new(0.35),
+        {TextTransparency = 1}):Play()
+    TweenService:Create(loadingTextStroke, TweenInfo.new(0.35),
+        {Transparency = 1}):Play()
+    task.delay(0.4, function()
+        if loadingGui.Parent then loadingGui:Destroy() end
+    end)
+end
+SG.Destroying:Connect(function()
+    if loadingGui.Parent then loadingGui:Destroy() end
+end)
+type PopupPhase = "preparing" | "opening" | "open" | "closing" | "closed"
+local popupPhase: PopupPhase = "preparing"
+local popupDisplayScale = 1
+local mainOpenPosition = UDim2.new(0.5, 0, 0.5, 0)
+local logOpenPosition = UDim2.new(0.75, 0, 0.5, 0)
+local mainClosedPosition = UDim2.new(0.5, 0, 1.5, 0)
+local logClosedPosition = UDim2.new(0.75, 0, 1.5, 0)
+local mainMotionTween, logMotionTween
+local refreshPopupLayout, stylePopupCursor
+local backgroundGui = Instance.new("ScreenGui")
+backgroundGui.Name = "HardCorePopupBackdrop"
+backgroundGui.ResetOnSpawn = false
+backgroundGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+backgroundGui.IgnoreGuiInset = true
+backgroundGui.ScreenInsets = Enum.ScreenInsets.None
+backgroundGui.ClipToDeviceSafeArea = false
+backgroundGui.DisplayOrder = SG.DisplayOrder
+backgroundGui.Enabled = SG.Enabled
+backgroundGui.Parent = playerGui
+SG.DisplayOrder = SG.DisplayOrder + 1
+local backdropStateConnection = SG:GetPropertyChangedSignal("Enabled"):Connect(function()
+    if backgroundGui.Parent then backgroundGui.Enabled = SG.Enabled end
+end)
+SG.Destroying:Connect(function()
+    backdropStateConnection:Disconnect()
+    backgroundGui:Destroy()
+end)
+local ContentViewport = Instance.new("Frame")
+ContentViewport.Name = "PopupContentViewport"
+ContentViewport.Position = UDim2.new(0, 0, 0, 0)
+ContentViewport.Size = UDim2.new(1, 0, 1, 0)
+ContentViewport.BackgroundTransparency = 1
+ContentViewport.BorderSizePixel = 0
+ContentViewport.Active = false
+ContentViewport.Selectable = false
+ContentViewport.ZIndex = 1
+ContentViewport.Parent = SG
+
+local BG = Instance.new("Frame")
+BG.Name = "BackgroundOverlay"
+BG.Size = UDim2.new(1, 0, 1, 0)
+BG.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+BG.BackgroundTransparency = 1
+BG.BorderSizePixel = 0
+BG.ZIndex = 1
+BG.Parent = backgroundGui
+local MC = Instance.new("Frame")
+MC.Name = "MainContainer"
+MC.Size = UDim2.new(0.4, 0, 0.7, 0)
+MC.Position = UDim2.new(0.3, 0, 1.2, 0)
+MC.BackgroundColor3 = Color3.fromRGB(25, 20, 20)
+MC.BorderSizePixel = 0
+MC.ClipsDescendants = true
+MC.ZIndex = 2
+MC.Parent = SG
+local C1 = Instance.new("UICorner")
+C1.CornerRadius = UDim.new(0.05, 0)
+C1.Parent = MC
+local OS = Instance.new("UIStroke")
+OS.Color = Color3.fromRGB(255, 222, 189)
+OS.Thickness = 6
+OS.Parent = MC
+
+local CL = Instance.new("Frame")
+CL.Name = "ChangelogContainer"
+CL.Size = UDim2.new(0.22, 0, 0.7, 0)
+CL.Position = UDim2.new(0.72, 0, 1.2, 0)
+CL.BackgroundColor3 = Color3.fromRGB(25,20,20)
+CL.BackgroundTransparency = 1
+CL.BorderSizePixel = 0
+CL.ZIndex = 2
+CL.Parent = SG
+
+local CLCorner = Instance.new("UICorner")
+CLCorner.CornerRadius = UDim.new(0.05,0)
+CLCorner.Parent = CL
+
+local CLStroke = Instance.new("UIStroke")
+CLStroke.Color = Color3.fromRGB(255,222,189)
+CLStroke.Thickness = 6
+CLStroke.Transparency = 1
+CLStroke.Parent = CL
+
+local CLTitle = Instance.new("TextLabel")
+CLTitle.Text = "Changelog"
+CLTitle.FontFace = InterfaceFont
+CLTitle.TextSize = 30
+CLTitle.TextColor3 = Color3.fromRGB(255,240,230)
+CLTitle.TextTransparency = 1
+CLTitle.BackgroundTransparency = 1
+CLTitle.Size = UDim2.new(0.9,0,0.12,0)
+CLTitle.Position = UDim2.new(0.05,0,0.03,0)
+CLTitle.TextXAlignment = Enum.TextXAlignment.Center
+CLTitle.Parent = CL
+
+local CLLine = Instance.new("Frame")
+CLLine.Size = UDim2.new(0.85,0,0,2)
+CLLine.Position = UDim2.new(0.075,0,0.16,0)
+CLLine.BackgroundColor3 = Color3.fromRGB(255,222,189)
+CLLine.BackgroundTransparency = 1
+CLLine.Parent = CL
+
+local CLText = Instance.new("TextLabel")
+CLText.BackgroundTransparency = 1
+CLText.Size = UDim2.new(0.85,0,0.75,0)
+CLText.Position = UDim2.new(0.075,0,0.21,0)
+CLText.FontFace = InterfaceFont
+CLText.TextSize = 20
+CLText.TextColor3 = Color3.fromRGB(255,240,230)
+CLText.TextTransparency = 1
+CLText.TextWrapped = true
+CLText.TextXAlignment = Enum.TextXAlignment.Left
+CLText.TextYAlignment = Enum.TextYAlignment.Top
+CLText.Text =
+"1. Hotel version 10.7.0 has been updated! More new features, rooms, monsters, achievements, and rewards are waiting for you to explore! / Some of the new entities come from submissions by other authors, HeavenNow and Number303, participating with in part"
+CLText.Parent = CL
+
+local TL = Instance.new("TextLabel")
+TL.Name = "Title"
+TL.Text = "HardCore V10.7.0"
+TL.FontFace = CF
+TL.TextSize = 32
+TL.TextColor3 = Color3.fromRGB(255, 240, 230)
+TL.BackgroundTransparency = 1
+TL.Size = UDim2.new(0.4, 0, 0.08, 0)
+TL.Position = UDim2.new(0.05, 0, 0.02, 0)
+TL.TextXAlignment = Enum.TextXAlignment.Left
+TL.Parent = MC
+local CB = Instance.new("ImageButton")
+CB.Name = "CloseButton"
+CB.Size = UDim2.new(0.08, 0, 0.08, 0)
+CB.Position = UDim2.new(0.87, 0, 0.02, 0)
+CB.BackgroundTransparency = 1
+CB.Image = "rbxassetid://2195446979"
+CB.ImageColor3 = Color3.fromRGB(255, 222, 189)
+CB.Parent = MC
+local TI = Instance.new("ImageLabel")
+TI.Name = "TopImage"
+TI.Size = UDim2.new(0.9, 0, 0.3, 0)
+TI.Position = UDim2.new(0.05, 0, 0.12, 0)
+TI.BackgroundTransparency = 1
+TI.Image = "rbxassetid://86094480033570"
+TI.ScaleType = Enum.ScaleType.Crop
+TI.Parent = MC
+local C2 = Instance.new("UICorner")
+C2.CornerRadius = UDim.new(0.03, 0)
+C2.Parent = TI
+local RecommendLabel = Instance.new("TextLabel")
+RecommendLabel.Name = "RecommendLabel"
+RecommendLabel.Text = "Recommended for multiple players!"
+RecommendLabel.FontFace = RecommendFont
+RecommendLabel.TextSize = 50
+RecommendLabel.TextColor3 = Color3.fromRGB(255, 150, 150)  
+RecommendLabel.BackgroundTransparency = 1
+RecommendLabel.Size = UDim2.new(0.9, 0, 0.08, 0)
+RecommendLabel.Position = UDim2.new(0.05, 0, 0.45, 0) 
+RecommendLabel.TextXAlignment = Enum.TextXAlignment.Center
+RecommendLabel.TextYAlignment = Enum.TextYAlignment.Center
+RecommendLabel.Parent = MC
+
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Name = "ButtonScrollFrame"
+ScrollFrame.Size = UDim2.new(0.9, 0, 0.4, 0)
+ScrollFrame.Position = UDim2.new(0.05, 0, 0.52, 0)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 12
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 222, 189)
+ScrollFrame.ScrollBarImageTransparency = 0.3
+ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.None
+ScrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.Parent = MC
+
+local BC = Instance.new("Frame")
+BC.Name = "ButtonContainer"
+BC.Size = UDim2.new(1, 0, 0, 0)
+BC.BackgroundTransparency = 1
+BC.AutomaticSize = Enum.AutomaticSize.None
+BC.Parent = ScrollFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Padding = UDim.new(0, 18)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+UIListLayout.Parent = BC
+
+local UIPadding = Instance.new("UIPadding")
+UIPadding.PaddingTop = UDim.new(0, 12)
+UIPadding.PaddingBottom = UDim.new(0, 24)
+UIPadding.Parent = BC
+
+local MB = Instance.new("TextButton")
+MB.Name = "MusicButton"
+MB.Size = UDim2.new(0.9, 0, 0, 110)
+MB.LayoutOrder = 1
+MB.BackgroundColor3 = Color3.fromRGB(255, 222, 189)
+MB.BackgroundTransparency = 0.1
+MB.AutoButtonColor = true
+MB.Text = "Mines"
+MB.FontFace = CF
+MB.TextColor3 = Color3.fromRGB(80, 60, 40)
+MB.TextScaled = true
+MB.TextSize = 24
+MB.Parent = BC
+
+local PB = Instance.new("TextButton")
+PB.Name = "PlayButton"
+PB.Size = UDim2.new(0.9, 0, 0, 110)
+PB.LayoutOrder = 2
+PB.BackgroundColor3 = Color3.fromRGB(255, 222, 189)
+PB.BackgroundTransparency = 0.1
+PB.AutoButtonColor = true
+PB.Text = "Hotel"
+PB.FontFace = CF
+PB.TextColor3 = Color3.fromRGB(80, 60, 40)
+PB.TextScaled = true
+PB.TextSize = 24
+PB.Parent = BC
+
+local CB2 = Instance.new("TextButton")
+CB2.Name = "ChallengeButton"
+CB2.Size = UDim2.new(0.9, 0, 0, 110)
+CB2.LayoutOrder = 3
+CB2.BackgroundColor3 = Color3.fromRGB(255, 222, 189)
+CB2.BackgroundTransparency = 0.1
+CB2.AutoButtonColor = true
+CB2.Text = "Archives"
+CB2.FontFace = CF
+CB2.TextColor3 = Color3.fromRGB(80, 60, 40)
+CB2.TextScaled = true
+CB2.TextSize = 24
+CB2.Parent = BC
+
+local UB = Instance.new("TextButton")
+UB.Name = "UnknownButton"
+UB.Size = UDim2.new(0.9, 0, 0, 110)
+UB.LayoutOrder = 4
+UB.BackgroundColor3 = Color3.fromRGB(255, 222, 189)
+UB.BackgroundTransparency = 0.1
+UB.AutoButtonColor = true
+UB.Text = "Challenge"
+UB.FontFace = CF
+UB.TextColor3 = Color3.fromRGB(80, 60, 40)
+UB.TextScaled = true
+UB.TextSize = 24
+UB.Parent = BC
+
+local C3 = Instance.new("UICorner")
+C3.CornerRadius = UDim.new(0.15, 0)
+C3.Parent = MB
+
+local C4 = Instance.new("UICorner")
+C4.CornerRadius = UDim.new(0.15, 0)
+C4.Parent = PB
+
+local C5 = Instance.new("UICorner")
+C5.CornerRadius = UDim.new(0.15, 0)
+C5.Parent = CB2
+
+local C6 = Instance.new("UICorner")
+C6.CornerRadius = UDim.new(0.15, 0)
+C6.Parent = UB
+
+local S1 = Instance.new("UIStroke")
+S1.Color = Color3.fromRGB(220, 190, 160)
+S1.Thickness = 3
+S1.Parent = MB
+
+local S2 = Instance.new("UIStroke")
+S2.Color = Color3.fromRGB(220, 190, 160)
+S2.Thickness = 3
+S2.Parent = PB
+
+local S3 = Instance.new("UIStroke")
+S3.Color = Color3.fromRGB(220, 190, 160)
+S3.Thickness = 3
+S3.Parent = CB2
+
+local S4 = Instance.new("UIStroke")
+S4.Color = Color3.fromRGB(220, 190, 160)
+S4.Thickness = 3
+S4.Parent = UB
+
+local function updateScrollCanvas()
+    local contentHeight = UIListLayout.AbsoluteContentSize.Y / popupDisplayScale + UIPadding.PaddingTop.Offset + UIPadding.PaddingBottom.Offset
+    BC.Size = UDim2.new(1, 0, 0, contentHeight)
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
+end
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateScrollCanvas)
+updateScrollCanvas()
+
+local function KJ1()
+    local containerHeight = ScrollFrame.AbsoluteSize.Y
+    local buttonCount = 4
+    local totalPadding = (buttonCount - 1) * UIListLayout.Padding.Offset + UIPadding.PaddingTop.Offset + UIPadding.PaddingBottom.Offset
+    local availableHeight = containerHeight - totalPadding
+    local buttonHeight = availableHeight / buttonCount
+    return math.min(math.floor(buttonHeight * 0.3), 30)
+end
+
+local function updateButtonSizes()
+    local textSize = KJ1()
+    MB.TextSize = textSize
+    PB.TextSize = textSize
+    CB2.TextSize = textSize
+    UB.TextSize = textSize
+end
+
+local function KJ2(btn)
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundTransparency = 0.05}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundTransparency = 0.1}):Play()
+    end)
+end
+
+local function KJ3(btn)
+    btn.MouseButton1Down:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundTransparency = 0}):Play()
+    end)
+    btn.MouseButton1Up:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundTransparency = 0.1}):Play()
+    end)
+end
+
+KJ2(MB)
+KJ2(PB)
+KJ2(CB2)
+KJ2(UB)
+KJ3(MB)
+KJ3(PB)
+KJ3(CB2)
+KJ3(UB)
+
+local function playAudio()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://135724514015482"
+    sound.PlaybackSpeed = 0.9
+    sound.Parent = playerGui
+    
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
+
+    sound:Play()
+end
+
+UB.MouseButton1Click:Connect(function()
+    playAudio()
+    pcall(function()
+        loadstring(game:HttpGet("https://github.com/Zero0Star/RipperNewSound/blob/master/MODES-H.lua?raw=true"))()
+    end)
+end)
+
+CB2.MouseButton1Click:Connect(function()
+
+    playAudio()
+
+    local RunService = game:GetService("RunService")
+
+    local items = {
+        "HardcoreOne",
+        "HardcoreTwo",
+        "HardcoreM",
+        "HardcoreThree",
+        "HardcoreITEM",
+        "HardcoreMusic"
+    }
+
+
+    local found = {}
+    local connection = nil
+    local lastCount = 0
+    local loading = false
+
+
+    if loading then
+        return
+    end
+
+    loading = true
+
+
+
+    local function updateProgress()
+
+        local count = 0
+
+        for _, name in ipairs(items) do
+
+            if found[name] then
+                count += 1
+            end
+
+        end
+
+        if count ~= lastCount then
+
+            lastCount = count
+
+
+            pcall(function()
+
+                require(
+                    game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game
+                ).caption(
+                    "HardCore Archives Loading: "
+                    ..count.."/"..#items,
+                    true
+                )
+            end)
+        end
+        if count == #items then
+
+
+            if connection then
+                connection:Disconnect()
+                connection = nil
+            end
+
+            pcall(function()
+
+                require(
+                    game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game
+                ).caption(
+                    "HardCore Archives is all loaded!",
+                    true
+                )
+
+            end)
+
+        end
+
+    end
+    connection = RunService.Heartbeat:Connect(function()
+        for _, name in ipairs(items) do
+            if not found[name] then
+                local item = workspace:FindFirstChild(name,true)
+                if item and item:IsA("BoolValue") then
+                    found[name] = true
+
+                    updateProgress()
+                end
+            end
+        end
+    end)
+
+    task.spawn(function()
+
+        local scriptUrls = {
+
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/ArchivesLua.lua",
+
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/ArchivesLua2.lua",
+
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/ArchivesLua3.lua",
+
+            "https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Charm.lua",
+
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/ArchivesSound.lua",
+
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/ARCHIVESITEM.lua"
+
+        }
+
+        for _, url in ipairs(scriptUrls) do
+
+            task.spawn(function()
+
+                local success, err = pcall(function()
+
+
+                    local code = game:HttpGet(url)
+
+
+                    local func = loadstring(code)
+
+
+                    if func then
+
+                        func()
+
+                    end
+                end)
+
+                if success then
+
+                    print(
+                        "[Archives Loaded]",
+                        url
+                    )
+
+
+                else
+
+                    warn(
+                        "[Archives Failed]",
+                        url,
+                        err
+                    )
+
+                end
+
+            end)
+
+            task.wait(3)
+
+        end
+    end)
+    updateProgress()
+end)
+
+MB.MouseButton1Click:Connect(function()
+    playAudio()
+    
+    local RunService = game:GetService("RunService")
+    local items = {
+        "HardcoreOne",
+        "HardcoreTwo",
+        "HardcoreM", 
+        "HardcoreITEM",
+        "HardcoremUSIC",
+        "HardcoreFour"
+    }
+    local found = {}
+    local connection = nil
+    local isDone = false
+    local lastCount = 0
+    
+    local function updateProgress()
+        local count = 0
+        for _, name in ipairs(items) do
+            if found[name] then
+                count = count + 1
+            end
+        end
+
+        if count ~= lastCount then
+            lastCount = count
+            
+            pcall(function()
+                require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game)
+                    .caption("HardCoreMines Loading: " .. count .. "/6", true)
+            end)
+            
+            if count == 6 then
+                isDone = true
+                if connection then
+                    connection:Disconnect()
+                    connection = nil
+                end
+                
+                pcall(function()
+                    require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game)
+                        .caption("HardCoreMines is all loaded!", true)
+                end)
+            end
+        end
+    end
+
+    connection = RunService.Heartbeat:Connect(function()
+        for _, name in ipairs(items) do
+            if not found[name] then
+                local item = workspace:FindFirstChild(name)
+                if item and item:IsA("BoolValue") then
+                    found[name] = true
+                    updateProgress()
+                end
+            end
+        end
+    end)
+
+    updateProgress()
+
+    task.spawn(function()
+        local scriptUrls = {
+            "https://github.com/Zero0Star/Importantstuff/blob/master/HOTELLua2.lua?raw=true",
+            "https://github.com/Zero0Star/Importantstuff/blob/master/MinesMusic.lua?raw=true",
+            "https://github.com/Zero0Star/Importantstuff/blob/master/HOTELLua4.lua?raw=true",
+            "https://github.com/Zero0Star/RipperNewSound/blob/master/Charm.lua?raw=true",
+            "https://github.com/Zero0Star/Importantstuff/blob/master/HardcoreMineLua.lua?raw=true",
+            "https://github.com/Zero0Star/Importantstuff/blob/master/MineItem.lua?raw=true"
+        }
+        for _, url in ipairs(scriptUrls) do
+            if url and url ~= "" then
+                pcall(function()
+                    local remoteCode = game:HttpGet(url, true)
+                    loadstring(remoteCode)()
+                end)
+                if _ < #scriptUrls then 
+                    wait(5)
+                end
+            end
+        end
+    end)
+    
+    task.spawn(function()
+        local newSoundId = "rbxassetid://135253167165511"
+        
+        local function replaceDoorOpenSound(doorModel)
+            if not doorModel or not doorModel:IsA("Model") then
+                return
+            end
+            
+            local doorMeshPart = doorModel:FindFirstChild("Door")
+            if not doorMeshPart or not doorMeshPart:IsA("MeshPart") then
+                return
+            end
+            
+            local openSound = doorMeshPart:FindFirstChild("Open")
+            if not openSound or not openSound:IsA("Sound") then
+                return
+            end
+            
+            openSound.SoundId = newSoundId
+        end
+        
+        local function processRoom(room)
+            if not room or not room:IsA("Model") then
+                return
+            end
+            
+            local door = room:FindFirstChild("Door")
+            if door and door:IsA("Model") then
+                replaceDoorOpenSound(door)
+            end
+            
+            room.ChildAdded:Connect(function(child)
+                if child.Name == "Door" and child:IsA("Model") then
+                    replaceDoorOpenSound(child)
+                end
+            end)
+        end
+        
+        local function processAllCurrentRooms()
+            local currentRooms = workspace:FindFirstChild("CurrentRooms")
+            if not currentRooms then
+                return
+            end
+            
+            for _, room in ipairs(currentRooms:GetChildren()) do
+                processRoom(room)
+            end
+            
+            currentRooms.ChildAdded:Connect(function(room)
+                processRoom(room)
+            end)
+        end
+        
+        processAllCurrentRooms()
+        
+        workspace.DescendantAdded:Connect(function(descendant)
+            if descendant.Name == "Door" and descendant:IsA("Model") and descendant.Parent and descendant.Parent.Name == "Door" then
+                wait(0.1)
+                replaceDoorOpenSound(descendant)
+            end
+        end)
+    end)
+    
+    playAudio()
+end)
+
+PB.MouseButton1Click:Connect(function()
+    playAudio()
+    
+    local RunService = game:GetService("RunService")
+    local items = {
+        "HardcoreTwo",
+        "HardcoreOne",
+        "HardcoreM", 
+        "HardcoremUSIC",
+        "HardcoreFive",
+        "HardcoreFour",
+        "HardcoreITEM"
+    }
+    local found = {}
+    local connection = nil
+    local isDone = false
+    local lastCount = 0
+
+    local function updateProgress()
+        local count = 0
+        for _, name in ipairs(items) do
+            if found[name] then
+                count = count + 1
+            end
+        end
+
+        if count ~= lastCount then
+            lastCount = count
+            
+            pcall(function()
+                require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game)
+                    .caption("HardCore Loading: " .. count .. "/7", true)
+            end)
+            
+            if count == 7 then
+                isDone = true
+                if connection then
+                    connection:Disconnect()
+                    connection = nil
+                end
+                
+                pcall(function()
+                    require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game)
+                        .caption("HardCoreHotel is all loaded!", true)
+                end)
+            end
+        end
+    end
+
+    connection = RunService.Heartbeat:Connect(function()
+        for _, name in ipairs(items) do
+            if not found[name] then
+                local item = workspace:FindFirstChild(name)
+                if item and item:IsA("BoolValue") then
+                    found[name] = true
+                    updateProgress()
+                end
+            end
+        end
+    end)
+
+    task.spawn(function()
+        local scriptUrls = {
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/HotelSound.lua",
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/HOTELLua2.lua",
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/HOTELLua.lua",
+            "https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/Charm.lua",
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/HOTELMusic.lua",
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/HOTELLua4.lua",
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/HOTELLua5.lua",
+            "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/HOTELITEM.lua"
+            
+        }
+        for _, url in ipairs(scriptUrls) do
+            if url and url ~= "" then
+                pcall(function()
+                    local remoteCode = game:HttpGet(url, true)
+                    loadstring(remoteCode)()
+                end)
+                if _ < #scriptUrls then 
+                    wait(3)
+                end
+            end
+        end
+    end)
+    
+    updateProgress()
+    playAudio()
+end)
+
+local originalMouseBehavior = UIS.MouseBehavior
+local originalMouseIconEnabled = UIS.MouseIconEnabled
+
+local function unlockMouseForDoors()
+    UIS.MouseIconEnabled = false
+    UIS.MouseBehavior = Enum.MouseBehavior.Default
+    
+    local success, result = pcall(function()
+        game:GetService("StarterGui"):SetCore("ShiftLockEnabled", false)
+    end)
+    
+    local StarterPlayer = game:GetService("StarterPlayer")
+    if StarterPlayer then
+        StarterPlayer.EnableMouseLockOption = false
+    end
+end
+
+local function restoreMouseForDoors()
+    UIS.MouseBehavior = originalMouseBehavior
+    UIS.MouseIconEnabled = originalMouseIconEnabled
+    
+    local success, result = pcall(function()
+        game:GetService("StarterGui"):SetCore("ShiftLockEnabled", true)
+    end)
+    
+    local StarterPlayer = game:GetService("StarterPlayer")
+    if StarterPlayer then
+        StarterPlayer.EnableMouseLockOption = true
+    end
+end
+
+local customCursor
+local cursorConnection
+local cursorScreenGui
+
+local function createCustomCursor()
+    cursorScreenGui = Instance.new("ScreenGui")
+    cursorScreenGui.Name = "CustomCursorGui"
+    cursorScreenGui.ResetOnSpawn = false
+    cursorScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    cursorScreenGui.DisplayOrder = 9999
+    cursorScreenGui.Parent = playerGui
+    
+    customCursor = Instance.new("Frame")
+    customCursor.Name = "CustomCursor"
+    customCursor.Size = UDim2.new(0, 30, 0, 30)
+    customCursor.BackgroundColor3 = Color3.fromRGB(255, 222, 189)
+    customCursor.BackgroundTransparency = 0.2
+    customCursor.ZIndex = 9999
+    customCursor.Parent = cursorScreenGui
+    
+    local cursorCorner = Instance.new("UICorner")
+    cursorCorner.CornerRadius = UDim.new(1, 0)
+    cursorCorner.Parent = customCursor
+    
+    local cursorStroke = Instance.new("UIStroke")
+    cursorStroke.Color = Color3.fromRGB(255, 240, 220)
+    cursorStroke.Thickness = 3
+    cursorStroke.Parent = customCursor
+    
+    local mouse = player:GetMouse()
+    customCursor.Position = UDim2.new(0, mouse.X - 15, 0, mouse.Y - 15)
+    
+    cursorConnection = RunService.RenderStepped:Connect(function()
+        if customCursor and customCursor.Parent then
+            local mouse = player:GetMouse()
+            customCursor.Position = UDim2.new(0, mouse.X - 15, 0, mouse.Y - 15)
+        end
+    end)
+    if stylePopupCursor then stylePopupCursor() end
+end
+
+local function removeCustomCursor()
+    if cursorConnection then
+        cursorConnection:Disconnect()
+        cursorConnection = nil
+    end
+    
+    if customCursor then
+        customCursor:Destroy()
+        customCursor = nil
+    end
+    
+    if cursorScreenGui then
+        cursorScreenGui:Destroy()
+        cursorScreenGui = nil
+    end
+end
+
+local function KJ4()
+    if popupPhase ~= "preparing" or not SG.Parent then return end
+    unlockMouseForDoors()
+    RunService.RenderStepped:Wait()
+    if not SG.Parent then return end
+    createCustomCursor()
+    popupPhase = "opening"
+    TweenService:Create(BG, TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {BackgroundTransparency = 0.5}):Play()
+    mainMotionTween = TweenService:Create(MC,
+        TweenInfo.new(1, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        {Position = mainOpenPosition})
+    logMotionTween = TweenService:Create(CL,
+        TweenInfo.new(1, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        {Position = logOpenPosition})
+    mainMotionTween:Play()
+    logMotionTween:Play()
+    dismissGildedLoading()
+    TweenService:Create(CL, TweenInfo.new(1), {BackgroundTransparency = 0}):Play()
+    TweenService:Create(CLTitle, TweenInfo.new(1), {TextTransparency = 0}):Play()
+    TweenService:Create(CLText, TweenInfo.new(1), {TextTransparency = 0}):Play()
+    TweenService:Create(CLLine, TweenInfo.new(1), {BackgroundTransparency = 0}):Play()
+    TweenService:Create(CLStroke, TweenInfo.new(1), {Transparency = 0}):Play()
+    task.delay(1, function()
+        if (popupPhase :: PopupPhase) == "opening" and SG.Parent then
+            popupPhase = "open"
+            if refreshPopupLayout then refreshPopupLayout() end
+        end
+    end)
+end
+
+
+local stopBossTimeMusic = function() end
+local startBossTimeMusic = function() return false end
+local whenBossTimeReady
+do
+    local AUDIO_URL = "https://raw.githubusercontent.com/Zero0Star/RipperNewSound/master/BossTime.mp3"
+    local START_SECONDS = 110
+    local TARGET_VOLUME = 1
+    local FADE_IN_SECONDS = 1
+    local OUTRO_SECONDS = 10
+    local LOAD_TIMEOUT = 45
+
+    local writeAudio, readAudio, audioExists, deleteAudio = writefile, readfile, isfile, delfile
+    local customAsset = type(getcustomasset) == "function" and getcustomasset or getsynasset
+    local cachePath
+    local music, fadeTween
+    local loopConnection, endedConnection, fadeConnection, destroyConnection
+    local closing, disposed, started = false, false, false
+    local readiness
+    local readyCallbacks = {}
+    local function publishReady(success)
+        if readiness ~= nil then return end
+        readiness = success
+        for _, callback in ipairs(readyCallbacks) do
+            task.defer(callback, success)
+        end
+        table.clear(readyCallbacks)
+    end
+    whenBossTimeReady = function(callback)
+        if readiness ~= nil then
+            task.defer(callback, readiness)
+        else
+            table.insert(readyCallbacks, callback)
+        end
+    end
+
+    local function removeTempAudio()
+        if not cachePath or type(deleteAudio) ~= "function" then return end
+        local ok, exists = pcall(audioExists, cachePath)
+        if not ok or exists then
+            local removed, reason = pcall(deleteAudio, cachePath)
+            if not removed and ok and exists then
+                warn("[BossTime] Unable to remove temporary MP3: " .. tostring(reason))
+            end
+        end
+    end
+
+    local function disconnect(connection)
+        if connection then connection:Disconnect() end
+    end
+
+    local function dispose()
+        if disposed then return end
+        disposed, closing = true, true
+        disconnect(loopConnection)
+        disconnect(endedConnection)
+        disconnect(fadeConnection)
+        disconnect(destroyConnection)
+        loopConnection, endedConnection, fadeConnection, destroyConnection = nil, nil, nil, nil
+        if fadeTween then
+            fadeTween:Cancel()
+            fadeTween = nil
+        end
+        if music then
+            pcall(function()
+                music.Volume = 0
+                music:Stop()
+                music:Destroy()
+            end)
+            music = nil
+        end
+        removeTempAudio()
+        publishReady(false)
+    end
+
+    startBossTimeMusic = function()
+        if closing or disposed or readiness ~= true or not music or not music.Parent then
+            return false
+        end
+        if started then return true end
+        local ok, reason = pcall(function()
+            music.TimePosition = START_SECONDS
+            music:Resume()
+            started = true
+            loopConnection = music.DidLoop:Connect(function()
+                if not closing and not disposed and music and music.Parent then
+                    music.TimePosition = START_SECONDS
+                end
+            end)
+            fadeTween = TweenService:Create(music,
+                TweenInfo.new(FADE_IN_SECONDS, Enum.EasingStyle.Quad,
+                    Enum.EasingDirection.Out), {Volume = TARGET_VOLUME})
+            fadeTween:Play()
+        end)
+        if not ok then
+            warn("[BossTime] Playback failed: " .. tostring(reason))
+            dispose()
+        end
+        return ok
+    end
+
+    stopBossTimeMusic = function()
+        if closing or disposed then return end
+        closing = true
+        disconnect(destroyConnection)
+        destroyConnection = nil
+        disconnect(loopConnection)
+        loopConnection = nil
+        if fadeTween then
+            fadeTween:Cancel()
+            fadeTween = nil
+        end
+
+        
+        if not started or not music or not music.Parent then
+            dispose()
+            return
+        end
+
+        local ok, reason = pcall(function()
+            local outroDuration = math.min(OUTRO_SECONDS, music.TimeLength)
+            music.Looped = false
+            music.TimePosition = math.max(0, music.TimeLength - outroDuration)
+            if not music.IsPlaying then music:Play() end
+            endedConnection = music.Ended:Connect(dispose)
+            fadeTween = TweenService:Create(music,
+                TweenInfo.new(outroDuration, Enum.EasingStyle.Linear,
+                    Enum.EasingDirection.Out), {Volume = 0})
+            fadeConnection = fadeTween.Completed:Connect(function(state)
+                if state == Enum.PlaybackState.Completed then dispose() end
+            end)
+            fadeTween:Play()
+            
+            task.delay(outroDuration + 0.25, dispose)
+        end)
+        if not ok then
+            warn("[BossTime] Outro cleanup: " .. tostring(reason))
+            dispose()
+        end
+    end
+
+    destroyConnection = SG.Destroying:Connect(stopBossTimeMusic)
+
+    local available = type(writeAudio) == "function"
+        and type(readAudio) == "function"
+        and type(audioExists) == "function"
+        and type(deleteAudio) == "function"
+        and type(customAsset) == "function"
+
+    if not available then
+        warn("[BossTime] Requires writefile/readfile/isfile/delfile and getcustomasset or getsynasset.")
+        dispose()
+    else
+        local function isValidMP3(content)
+            if type(content) ~= "string" or #content < 128 then return false end
+            if content:sub(1, 3) == "ID3" then return true end
+            local first, second = content:byte(1, 2)
+            return first == 255 and second ~= nil and second >= 224
+        end
+
+        local function verifyAudio()
+            local existsOK, exists = pcall(audioExists, cachePath)
+            if not existsOK or not exists then return false end
+            local readOK, content = pcall(readAudio, cachePath)
+            return readOK and isValidMP3(content)
+        end
+
+        local function downloadAudio()
+            local requestOK, content = pcall(function()
+                return game:HttpGet(AUDIO_URL, true)
+            end)
+            if closing or disposed then return false end
+            if not requestOK or not isValidMP3(content) then return false end
+            local writeOK = pcall(writeAudio, cachePath, content)
+            
+            if closing or disposed then
+                removeTempAudio()
+                return false
+            end
+            if not writeOK or not verifyAudio() then
+                removeTempAudio()
+                return false
+            end
+            return true
+        end
+
+        task.spawn(function()
+            local ok, reason = pcall(function()
+                if closing or disposed or not SG.Parent then return end
+                
+                cachePath = "HardCoreOTS_BossTime_"
+                    .. game:GetService("HttpService"):GenerateGUID(false) .. ".mp3"
+                local retryDelay = 1
+                while not closing and not disposed do
+                    if verifyAudio() or downloadAudio() then break end
+                    if closing or disposed then return end
+                    task.wait(retryDelay)
+                    retryDelay = math.min(retryDelay * 1.5, 8)
+                end
+                if closing or disposed then return end
+
+                local assetOK, assetId = pcall(customAsset, cachePath)
+                if closing or disposed then
+                    removeTempAudio()
+                    return
+                end
+                if not assetOK or type(assetId) ~= "string" or assetId == "" then
+                    error("Unable to register BossTime custom asset")
+                end
+
+                music = Instance.new("Sound")
+                music.Name = "HardCoreOTS_BossTime"
+                music.SoundId = assetId
+                music.Volume = 0
+                music.PlaybackSpeed = 1
+                music.Looped = true
+                music.PlayOnRemove = false
+                music.Parent = SoundService
+                
+                music:Play()
+                local waited = 0
+                while not closing and not disposed and music and music.Parent
+                    and (not music.IsLoaded or music.TimeLength <= 0)
+                    and waited < LOAD_TIMEOUT do
+                    waited = waited + task.wait(0.1)
+                end
+                if closing or disposed then return end
+                if not music or not music.Parent or not music.IsLoaded
+                    or music.TimeLength <= 0 then
+                    error("BossTime did not finish loading within " .. LOAD_TIMEOUT .. " seconds")
+                end
+                if music.TimeLength <= START_SECONDS then
+                    error("BossTime must be longer than 110 seconds")
+                end
+
+                music:Pause()
+                music.TimePosition = START_SECONDS
+                publishReady(true)
+            end)
+            if not ok then
+                if not closing then warn("[BossTime] " .. tostring(reason)) end
+                dispose()
+            end
+        end)
+    end
+end
+
+
+local function KJ5()
+    if popupPhase == "closing" or popupPhase == "closed" or not SG.Parent then return end
+    popupPhase = "closing"
+    stopBossTimeMusic()
+    removeCustomCursor()
+    if mainMotionTween then mainMotionTween:Cancel() end
+    if logMotionTween then logMotionTween:Cancel() end
+    mainMotionTween = TweenService:Create(MC,
+        TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Position = mainClosedPosition})
+    logMotionTween = TweenService:Create(CL,
+        TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Position = logClosedPosition})
+    mainMotionTween:Play()
+    logMotionTween:Play()
+    TweenService:Create(CL, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(CLTitle, TweenInfo.new(0.4), {TextTransparency = 1}):Play()
+    TweenService:Create(CLText, TweenInfo.new(0.4), {TextTransparency = 1}):Play()
+    TweenService:Create(CLLine, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(CLStroke, TweenInfo.new(0.4), {Transparency = 1}):Play()
+    TweenService:Create(BG, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {BackgroundTransparency = 1}):Play()
+    wait(0.6)
+    restoreMouseForDoors()
+    popupPhase = "closed"
+    SG:Destroy()
+end
+
+CB.MouseButton1Click:Connect(KJ5)
+
+
+RunService.RenderStepped:Connect(function()
+    if SG and SG.Parent then
+        updateButtonSizes()
+    end
+end)
+
+UIS.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.Escape and SG and SG.Parent and SG.Enabled then
+        KJ5()
+    end
+end)
+
+local mouseUnlockFrame = Instance.new("Frame")
+mouseUnlockFrame.Name = "MouseUnlockHelper"
+mouseUnlockFrame.Size = UDim2.new(1, 0, 1, 0)
+mouseUnlockFrame.BackgroundTransparency = 1
+mouseUnlockFrame.Parent = SG
+
+RunService.Heartbeat:Connect(function()
+    if SG and SG.Parent and SG.Enabled then
+        UIS.MouseIconEnabled = false
+        UIS.MouseBehavior = Enum.MouseBehavior.Default
+    end
+end)
+
+do
+    if SG and SG.Parent and not SG:FindFirstChild("GildedTechTheme") then
+        local Theme = {
+            Motion = true,
+            ParticleCount = UIS.TouchEnabled and 8 or 12,
+            AnimationFPS = 30,
+            Gold = Color3.fromRGB(225, 180, 94),
+            PaleGold = Color3.fromRGB(255, 235, 189),
+            Bronze = Color3.fromRGB(108, 76, 37),
+            Ice = Color3.fromRGB(118, 189, 207),
+            Text = Color3.fromRGB(239, 235, 224),
+            Muted = Color3.fromRGB(150, 159, 172),
+            White = Color3.fromRGB(255, 255, 255),
+        }
+
+        local marker = Instance.new("Folder")
+        marker.Name = "GildedTechTheme"
+        marker.Parent = SG
+
+        local connections, tweens = {}, {}
+        local alive = true
+        local function connect(signal, callback)
+            local connection = signal:Connect(callback)
+            table.insert(connections, connection)
+            return connection
+        end
+
+        local function make(className, parent, properties)
+            local object = Instance.new(className)
+            if object:IsA("GuiObject") then
+                object.BorderSizePixel = 0
+                object.Active = false
+                object.Selectable = false
+            end
+            for property, value in pairs(properties or {}) do
+                object[property] = value
+            end
+            object.Parent = parent
+            return object
+        end
+
+        local function round(parent, pixels)
+            local object = parent:FindFirstChildOfClass("UICorner")
+                or make("UICorner", parent)
+            object.CornerRadius = UDim.new(0, pixels)
+            return object
+        end
+
+        local function outline(parent, thickness, transparency, color)
+            return make("UIStroke", parent, {
+                ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                Color = color or Theme.Gold,
+                Thickness = thickness,
+                Transparency = transparency,
+            })
+        end
+
+        local function gradient(parent, colors, rotation, transparency)
+            local points = {}
+            for index, color in ipairs(colors) do
+                points[index] = ColorSequenceKeypoint.new(
+                    (index - 1) / (#colors - 1), color
+                )
+            end
+            local object = make("UIGradient", parent, {
+                Color = ColorSequence.new(points),
+                Rotation = rotation or 0,
+            })
+            if transparency then
+                object.Transparency = transparency
+            end
+            return object
+        end
+
+        local function label(parent, text, properties, maximum)
+            local object = make("TextLabel", parent, {
+                Name = "GildedLabel",
+                BackgroundTransparency = 1,
+                Text = text,
+                FontFace = InterfaceFont,
+                TextColor3 = Theme.Text,
+                TextScaled = true,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 6,
+            })
+            for property, value in pairs(properties or {}) do
+                object[property] = value
+            end
+            make("UITextSizeConstraint", object, {
+                MinTextSize = 8, MaxTextSize = maximum or 18,
+            })
+            return object
+        end
+
+        local function constrainText(object, minimum, maximum)
+            object.TextScaled = true
+            local constraint = object:FindFirstChildOfClass("UITextSizeConstraint")
+                or make("UITextSizeConstraint", object)
+            constraint.MinTextSize = minimum
+            constraint.MaxTextSize = maximum
+        end
+
+        local function tween(object, properties, duration)
+            if not alive or not object.Parent then return end
+            if tweens[object] then tweens[object]:Cancel() end
+            local animation = TweenService:Create(object,
+                TweenInfo.new(duration or 0.22, Enum.EasingStyle.Quad,
+                    Enum.EasingDirection.Out), properties)
+            tweens[object] = animation
+            animation:Play()
+        end
+
+        local metalColors = {
+            Theme.Bronze, Theme.Gold, Theme.PaleGold, Theme.Gold, Theme.Bronze,
+        }
+        local panltLauncher = make("Frame", SG, {
+            Name = "PANLTLauncher",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Size = UDim2.fromOffset(300, 118),
+            BackgroundTransparency = 1,
+            ZIndex = 11,
+        })
+        local panltLauncherScale = make("UIScale", panltLauncher, {Scale = 1})
+        local panltGoldBase = make("ImageLabel", panltLauncher, {
+            Name = "PANLTGoldBase",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, -45, 0, 48),
+            Size = UDim2.fromOffset(270, 270),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://71699565716993",
+            ImageColor3 = Theme.White,
+            ImageTransparency = 0.04,
+            ScaleType = Enum.ScaleType.Fit,
+            ZIndex = 12,
+        })
+        local panltGoldGradient = gradient(panltGoldBase, metalColors, 25)
+        local panltIcon = make("ImageButton", panltLauncher, {
+            Name = "PANLTButton",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, -45, 0, 48),
+            Size = UDim2.fromOffset(70, 70),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://138986094998542",
+            ImageColor3 = Theme.White,
+            ScaleType = Enum.ScaleType.Fit,
+            AutoButtonColor = false,
+            Active = true,
+            Selectable = true,
+            ZIndex = 13,
+        })
+        local panltTitle = label(panltLauncher, "Assist (Need to get permission / Press T to open)", {
+            Name = "PANLTCaption",
+            AnchorPoint = Vector2.new(0.5, 0),
+            Position = UDim2.new(0.5, -45, 0, 96),
+            Size = UDim2.fromOffset(225, 52),
+            TextWrapped = true,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextColor3 = Theme.PaleGold,
+            ZIndex = 13,
+        }, 12)
+
+        local panltBaseScale = 1
+        local panltPositionX, panltPositionYOffset = 0, 0
+        local function syncPANLTPosition()
+            if not panltLauncher.Parent then return end
+            local mainY = MC.Position.Y.Scale * ContentViewport.AbsoluteSize.Y
+                + MC.Position.Y.Offset
+            panltLauncher.Position = UDim2.fromOffset(
+                panltPositionX, mainY + panltPositionYOffset)
+        end
+        connect(MC:GetPropertyChangedSignal("Position"), syncPANLTPosition)
+
+        connect(panltIcon.MouseEnter, function()
+            tween(panltLauncherScale, {Scale = panltBaseScale * 1.06}, 0.2)
+            tween(panltIcon, {ImageTransparency = 0}, 0.2)
+        end)
+        connect(panltIcon.MouseLeave, function()
+            tween(panltLauncherScale, {Scale = panltBaseScale}, 0.2)
+        end)
+
+        local panltLoading = false
+        connect(panltIcon.MouseButton1Click, function()
+            if panltLoading then return end
+            panltLoading = true
+            playAudio()
+            task.spawn(function()
+                local ok, err = pcall(function()
+                    loadstring(game:HttpGet(
+                        "https://raw.githubusercontent.com/Zero0Star/Importantstuff/master/PANLT"
+                    ))()
+                end)
+                if not ok then
+                    warn("[PANLT] Load failed: " .. tostring(err))
+                end
+                panltLoading = false
+            end)
+        end)
+
+        local panelColors = {
+            Color3.fromRGB(8, 13, 22),
+            Color3.fromRGB(18, 27, 40),
+            Color3.fromRGB(30, 26, 24),
+        }
+        local function brackets(parent, inset, length, transparency)
+            for _, cornerData in ipairs({
+                {0, 0, 1, 1}, {1, 0, -1, 1},
+                {0, 1, 1, -1}, {1, 1, -1, -1},
+            }) do
+                local x, y, dx, dy = table.unpack(cornerData)
+                make("Frame", parent, {
+                    Name = "GildedCornerHorizontal",
+                    AnchorPoint = Vector2.new(x, y),
+                    Position = UDim2.new(x, dx * inset, y, dy * inset),
+                    Size = UDim2.new(0, length, 0, 1),
+                    BackgroundColor3 = Theme.Gold,
+                    BackgroundTransparency = transparency,
+                    ZIndex = 3,
+                })
+                make("Frame", parent, {
+                    Name = "GildedCornerVertical",
+                    AnchorPoint = Vector2.new(x, y),
+                    Position = UDim2.new(x, dx * inset, y, dy * inset),
+                    Size = UDim2.new(0, 1, 0, length),
+                    BackgroundColor3 = Theme.Gold,
+                    BackgroundTransparency = transparency,
+                    ZIndex = 3,
+                })
+            end
+        end
+
+        BG.BackgroundColor3 = Theme.White
+        gradient(BG, {
+            Color3.fromRGB(3, 6, 12),
+            Color3.fromRGB(9, 16, 27),
+            Color3.fromRGB(12, 10, 8),
+        }, 25)
+        local backgroundLayer = make("Frame", ContentViewport, {
+            Name = "GildedAmbient",
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            ZIndex = 1,
+        })
+        local fadeTargets, particles = {}, {}
+        local backgroundVisibility = 0
+        local function trackFade(object, property, base)
+            local entry = {object = object, property = property, base = base}
+            table.insert(fadeTargets, entry)
+            return entry
+        end
+        for index = 1, 11 do
+            local line = make("Frame", backgroundLayer, {
+                Name = "GildedGridVertical",
+                Position = UDim2.new(index / 12, 0, 0, 0),
+                Size = UDim2.new(0, 1, 1, 0),
+                BackgroundColor3 = Theme.Ice,
+                BackgroundTransparency = 1,
+                ZIndex = 1,
+            })
+            trackFade(line, "BackgroundTransparency", 0.972)
+        end
+        for index = 1, 7 do
+            local line = make("Frame", backgroundLayer, {
+                Name = "GildedGridHorizontal",
+                Position = UDim2.new(0, 0, index / 8, 0),
+                Size = UDim2.new(1, 0, 0, 1),
+                BackgroundColor3 = Theme.Ice,
+                BackgroundTransparency = 1,
+                ZIndex = 1,
+            })
+            trackFade(line, "BackgroundTransparency", 0.972)
+        end
+        local ambientTitle = label(backgroundLayer, "H A R D C O R E   /   LAUNCHER", {
+            Position = UDim2.new(0.08, 0, 0.055, 0),
+            Size = UDim2.new(0.84, 0, 0.025, 0),
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextColor3 = Theme.Gold,
+        }, 11)
+        trackFade(ambientTitle, "TextTransparency", 0.32)
+        local ambientFooter = label(backgroundLayer, "GILDED INTERFACE   /   V10.7.0", {
+            Position = UDim2.new(0.08, 0, 0.92, 0),
+            Size = UDim2.new(0.84, 0, 0.023, 0),
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextColor3 = Theme.Muted,
+        }, 10)
+        trackFade(ambientFooter, "TextTransparency", 0.42)
+        
+        local otsCredit = label(backgroundLayer, "HardCore-OTS By HeavenNow", {
+            Name = "HardCoreOTSCredit",
+            AnchorPoint = Vector2.new(0, 1),
+            Position = UDim2.new(0, 24, 1, -14),
+            Size = UDim2.new(0.9, -48, 0, 22),
+            TextColor3 = Theme.White,
+        }, 17)
+        make("UISizeConstraint", otsCredit, {
+            MaxSize = Vector2.new(330, 22),
+        })
+        local creditGradient = gradient(otsCredit, metalColors, 0)
+        trackFade(otsCredit, "TextTransparency", 0.05)
+
+        local random = Random.new(107)
+        for index = 1, Theme.ParticleCount do
+            local size = random:NextNumber(1.5, 3)
+            local particle = make("Frame", backgroundLayer, {
+                Name = "GildedDust",
+                Size = UDim2.new(0, size, 0, size),
+                Position = UDim2.new(random:NextNumber(), 0,
+                    random:NextNumber(), 0),
+                BackgroundColor3 = index % 4 == 0 and Theme.Ice or Theme.Gold,
+                BackgroundTransparency = 1,
+                ZIndex = 2,
+            })
+            round(particle, 8)
+            table.insert(particles, {
+                object = particle,
+                x = particle.Position.X.Scale,
+                y = particle.Position.Y.Scale,
+                speed = random:NextNumber(0.012, 0.028),
+                phase = random:NextNumber(0, math.pi * 2),
+                fade = trackFade(particle, "BackgroundTransparency", 0.58),
+            })
+        end
+        local function syncBackgroundFade()
+            backgroundVisibility = math.clamp(
+                (1 - BG.BackgroundTransparency) / 0.5, 0, 1)
+            for _, entry in ipairs(fadeTargets) do
+                entry.object[entry.property] =
+                    1 - (1 - entry.base) * backgroundVisibility
+            end
+        end
+        connect(BG:GetPropertyChangedSignal("BackgroundTransparency"),
+            syncBackgroundFade)
+        syncBackgroundFade()
+
+        MC.BackgroundColor3 = Theme.White
+        CL.BackgroundColor3 = Theme.White
+        local mainGradient = gradient(MC, panelColors, 115)
+        gradient(CL, panelColors, 105)
+        C1.CornerRadius = UDim.new(0, 18)
+        CLCorner.CornerRadius = UDim.new(0, 16)
+        OS.Color, OS.Thickness, OS.Transparency = Theme.White, 1.6, 0.12
+        CLStroke.Color, CLStroke.Thickness = Theme.White, 1.3
+        local mainBorderGradient = gradient(OS, metalColors, 20)
+        local sideBorderGradient = gradient(CLStroke, metalColors, 160)
+        local mainDecor = make("Frame", MC, {
+            Name = "GildedPanelDetails",
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            ZIndex = 1,
+        })
+        local innerBorder = make("Frame", mainDecor, {
+            Position = UDim2.new(0, 6, 0, 6),
+            Size = UDim2.new(1, -12, 1, -12),
+            BackgroundTransparency = 1,
+            ZIndex = 1,
+        })
+        round(innerBorder, 13)
+        outline(innerBorder, 1, 0.88)
+        brackets(mainDecor, 12, 17, 0.28)
+        for index = 1, 7 do
+            make("Frame", mainDecor, {
+                Name = "GildedPanelGrid",
+                Position = UDim2.new(index / 8, 0, 0.11, 0),
+                Size = UDim2.new(0, 1, 0.82, 0),
+                BackgroundColor3 = Theme.Ice,
+                BackgroundTransparency = 0.97,
+                ZIndex = 1,
+            })
+        end
+        local headerLine = make("Frame", mainDecor, {
+            Position = UDim2.new(0.05, 0, 0.108, 0),
+            Size = UDim2.new(0.9, 0, 0, 1),
+            BackgroundColor3 = Theme.White,
+            ZIndex = 2,
+        })
+        gradient(headerLine, {Theme.Bronze, Theme.Gold, Theme.Ice}, 0)
+
+        TL.Position = UDim2.new(0.05, 0, 0.025, 0)
+        TL.Size = UDim2.new(0.77, 0, 0.048, 0)
+        TL.TextColor3, TL.ZIndex = Theme.White, 6
+        constrainText(TL, 12, 29)
+        local titleGradient = gradient(TL, {
+            Theme.PaleGold, Theme.White, Theme.Gold,
+        }, 0)
+        label(MC, "HARDCORE  /  MODE SELECT", {
+            Position = UDim2.new(0.052, 0, 0.078, 0),
+            Size = UDim2.new(0.76, 0, 0.019, 0),
+            TextColor3 = Theme.Gold,
+            TextTransparency = 0.26,
+        }, 10)
+        CB.AnchorPoint = Vector2.new(1, 0)
+        CB.Position = UDim2.new(0.95, 0, 0.029, 0)
+        CB.Size = UDim2.new(0, 28, 0, 28)
+        CB.BackgroundColor3 = Color3.fromRGB(43, 34, 28)
+        CB.BackgroundTransparency = 0.25
+        CB.ImageColor3, CB.ZIndex = Theme.Gold, 8
+        round(CB, 8)
+        local closeBorder = outline(CB, 1, 0.67)
+        connect(CB.MouseEnter, function()
+            tween(CB, {ImageColor3 = Theme.PaleGold,
+                BackgroundColor3 = Color3.fromRGB(91, 47, 38)}, 0.18)
+            tween(closeBorder, {Transparency = 0.2}, 0.18)
+        end)
+        connect(CB.MouseLeave, function()
+            tween(CB, {ImageColor3 = Theme.Gold,
+                BackgroundColor3 = Color3.fromRGB(43, 34, 28)}, 0.18)
+            tween(closeBorder, {Transparency = 0.67}, 0.18)
+        end)
+
+        TI.Position, TI.Size = UDim2.new(0.05, 0, 0.133, 0),
+            UDim2.new(0.9, 0, 0.265, 0)
+        TI.ZIndex, TI.ClipsDescendants = 5, true
+        C2.CornerRadius = UDim.new(0, 12)
+        outline(TI, 1, 0.52)
+        local imageShade = make("Frame", TI, {
+            Name = "GildedImageShade",
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundColor3 = Color3.fromRGB(5, 9, 16),
+            ZIndex = 1,
+        })
+        round(imageShade, 12)
+        gradient(imageShade, {Theme.White, Theme.White}, 90,
+            NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.92),
+                NumberSequenceKeypoint.new(0.5, 0.9),
+                NumberSequenceKeypoint.new(1, 0.2),
+            }))
+        brackets(TI, 8, 13, 0.15)
+        label(TI, "V10.7.0  /  HARDCORE", {
+            Position = UDim2.new(0, 14, 0, 11),
+            Size = UDim2.new(0.75, -14, 0, 16),
+            TextColor3 = Theme.PaleGold,
+        }, 10)
+        label(TI, "CHOOSE YOUR EXPERIENCE", {
+            Position = UDim2.new(0, 14, 1, -32),
+            Size = UDim2.new(1, -28, 0, 20),
+            TextColor3 = Theme.PaleGold,
+        }, 15)
+        local scanner = make("Frame", TI, {
+            Name = "GildedImageScanner",
+            Position = UDim2.new(0.04, 0, 0, 0),
+            Size = UDim2.new(0.92, 0, 0, 2),
+            BackgroundColor3 = Theme.White,
+            BackgroundTransparency = 0.6,
+            ZIndex = 4,
+        })
+        gradient(scanner, {Theme.Gold, Theme.Ice, Theme.Gold}, 0,
+            NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(0.5, 0.1),
+                NumberSequenceKeypoint.new(1, 1),
+            }))
+
+        RecommendLabel.Position = UDim2.new(0.07, 0, 0.425, 0)
+        RecommendLabel.Size = UDim2.new(0.86, 0, 0.048, 0)
+        RecommendLabel.TextColor3, RecommendLabel.ZIndex = Theme.White, 6
+        constrainText(RecommendLabel, 10, 19)
+        local recommendationGradient = gradient(RecommendLabel, {
+            Theme.Gold, Theme.PaleGold, Theme.Gold,
+        }, 0)
+        local modeSectionLabel = label(MC, "SELECT MODE", {
+            Position = UDim2.new(0.055, 0, 0.493, 0),
+            Size = UDim2.new(0.42, 0, 0.02, 0),
+            TextColor3 = Theme.Muted,
+        }, 10)
+        local modeCountLabel = label(MC, "04 / EXPERIENCES", {
+            Position = UDim2.new(0.52, 0, 0.493, 0),
+            Size = UDim2.new(0.42, 0, 0.02, 0),
+            TextColor3 = Theme.Gold,
+            TextXAlignment = Enum.TextXAlignment.Right,
+        }, 10)
+        ScrollFrame.Position, ScrollFrame.Size = UDim2.new(0.05, 0, 0.53, 0),
+            UDim2.new(0.9, 0, 0.4, 0)
+        ScrollFrame.ScrollBarThickness = 4
+        ScrollFrame.ScrollBarImageColor3 = Theme.Gold
+        ScrollFrame.ScrollBarImageTransparency = 0.18
+        ScrollFrame.ZIndex = 6
+        UIListLayout.Padding = UDim.new(0, 12)
+        UIPadding.PaddingTop = UDim.new(0, 5)
+        UIPadding.PaddingBottom = UDim.new(0, 18)
+        local footerHint = label(MC, "SCROLL TO EXPLORE  /  ESC TO CLOSE", {
+            Position = UDim2.new(0.05, 0, 0.953, 0),
+            Size = UDim2.new(0.9, 0, 0.018, 0),
+            TextColor3 = Theme.Muted,
+            TextTransparency = 0.14,
+            TextXAlignment = Enum.TextXAlignment.Center,
+        }, 9)
+
+        local cards = {}
+        local buttons = {MB, PB, CB2, UB}
+        local strokes = {S1, S2, S3, S4}
+        local subtitles = {
+            "01 / MINES", "02 / HOTEL", "03 / ARCHIVES", "04 / CHALLENGE",
+        }
+        local sheenTransparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.36, 1),
+            NumberSequenceKeypoint.new(0.5, 0.86),
+            NumberSequenceKeypoint.new(0.64, 1),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+        for index, button in ipairs(buttons) do
+            button.BackgroundColor3 = Color3.fromRGB(26, 27, 30)
+            button.TextTransparency = 1
+            button.AutoButtonColor = false
+            button.ClipsDescendants = true
+            button.ZIndex = 4
+            round(button, 12)
+            local border = strokes[index]
+            border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            border.Thickness, border.Color, border.Transparency =
+                1, Theme.White, 0.48
+            local borderGradient = gradient(border, metalColors, 15 + index * 25)
+            local surface = make("Frame", button, {
+                Name = "GildedCardSurface",
+                Size = UDim2.new(1, 0, 1, 0),
+                BackgroundColor3 = Color3.fromRGB(209, 215, 225),
+                BackgroundTransparency = 0.04,
+                ZIndex = 1,
+            })
+            round(surface, 12)
+            gradient(surface, {
+                Color3.fromRGB(19, 29, 43),
+                Color3.fromRGB(28, 34, 43),
+                Color3.fromRGB(46, 36, 25),
+            }, 15)
+            local sheen = make("Frame", button, {
+                Name = "GildedCardSheen",
+                Size = UDim2.new(1, 0, 1, 0),
+                BackgroundColor3 = Theme.PaleGold,
+                ZIndex = 2,
+            })
+            round(sheen, 12)
+            local sheenGradient = gradient(sheen,
+                {Theme.White, Theme.White}, 20, sheenTransparency)
+            sheenGradient.Offset = Vector2.new(-1.2, 0)
+            local accent = make("Frame", button, {
+                Position = UDim2.new(0, 1, 0.25, 0),
+                Size = UDim2.new(0, 2, 0.5, 0),
+                BackgroundColor3 = Theme.Gold,
+                BackgroundTransparency = 0.15,
+                ZIndex = 3,
+            })
+            round(accent, 2)
+            local indexBox = make("Frame", button, {
+                Name = "GildedModeIndex",
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 14, 0.5, 0),
+                Size = UDim2.new(0, 34, 0, 34),
+                BackgroundColor3 = Color3.fromRGB(43, 38, 30),
+                ZIndex = 4,
+            })
+            round(indexBox, 9)
+            outline(indexBox, 1, 0.65)
+            label(indexBox, string.format("%02d", index), {
+                Size = UDim2.new(1, 0, 1, 0),
+                TextColor3 = Theme.PaleGold,
+                TextXAlignment = Enum.TextXAlignment.Center,
+            }, 14)
+            local modeTitle = label(button, button.Text, {
+                Name = "GildedModeTitle",
+                FontFace = CF,
+                Position = UDim2.new(0, 62, 0.16, 0),
+                Size = UDim2.new(1, -102, 0.39, 0),
+                TextColor3 = Theme.PaleGold,
+            }, 24)
+            connect(button:GetPropertyChangedSignal("Text"), function()
+                modeTitle.Text = button.Text
+            end)
+            label(button, subtitles[index], {
+                Position = UDim2.new(0, 63, 0.61, 0),
+                Size = UDim2.new(1, -103, 0.18, 0),
+                TextColor3 = Theme.Muted,
+            }, 10)
+            local arrow = label(button, ">", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -22, 0.5, 0),
+                Size = UDim2.new(0, 15, 0, 24),
+                TextColor3 = Theme.Gold,
+                TextXAlignment = Enum.TextXAlignment.Center,
+            }, 21)
+            local scale = make("UIScale", button, {Scale = 1})
+            local state = {
+                button = button, borderGradient = borderGradient,
+                sheen = sheenGradient, hovered = false, selected = false,
+                pressed = false,
+            }
+            table.insert(cards, state)
+            local function refreshCard()
+                local focused = state.hovered or state.selected
+                tween(scale, {Scale = state.pressed and 0.982
+                    or (focused and 1.012 or 1)}, 0.16)
+                tween(border, {Transparency = focused and 0.08 or 0.48,
+                    Thickness = focused and 1.4 or 1}, 0.2)
+                tween(surface, {BackgroundColor3 = focused and Theme.White
+                    or Color3.fromRGB(209, 215, 225)}, 0.2)
+                tween(indexBox, {BackgroundColor3 = focused
+                    and Color3.fromRGB(72, 54, 32)
+                    or Color3.fromRGB(43, 38, 30)}, 0.2)
+                tween(arrow, {Position = UDim2.new(1, focused and -16 or -22,
+                    0.5, 0), TextColor3 = focused and Theme.PaleGold
+                    or Theme.Gold}, 0.2)
+            end
+            connect(button.MouseEnter, function()
+                state.hovered = true
+                refreshCard()
+            end)
+            connect(button.MouseLeave, function()
+                state.hovered, state.pressed = false, false
+                refreshCard()
+            end)
+            connect(button.SelectionGained, function()
+                state.selected = true
+                refreshCard()
+            end)
+            connect(button.SelectionLost, function()
+                state.selected, state.pressed = false, false
+                refreshCard()
+            end)
+            connect(button.InputBegan, function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
+                    state.pressed = true
+                    refreshCard()
+                end
+            end)
+            connect(button.InputEnded, function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
+                    state.pressed = false
+                    refreshCard()
+                end
+            end)
+        end
+        CLTitle.TextColor3, CLTitle.ZIndex = Theme.PaleGold, 6
+        CLTitle.Position, CLTitle.Size = UDim2.new(0.1, 0, 0.075, 0),
+            UDim2.new(0.8, 0, 0.065, 0)
+        CLTitle.TextXAlignment = Enum.TextXAlignment.Left
+        constrainText(CLTitle, 12, 24)
+        CLLine.Position, CLLine.Size = UDim2.new(0.1, 0, 0.168, 0),
+            UDim2.new(0.8, 0, 0, 1)
+        CLLine.BackgroundColor3, CLLine.ZIndex = Theme.White, 5
+        gradient(CLLine, {Theme.Gold, Theme.Bronze}, 0)
+        CLText.TextColor3, CLText.ZIndex = Theme.Text, 6
+        CLText.Position, CLText.Size = UDim2.new(0.1, 0, 0.21, 0),
+            UDim2.new(0.8, 0, 0.51, 0)
+        constrainText(CLText, 10, 18)
+        local sideDecor = make("CanvasGroup", CL, {
+            Name = "GildedChangelogDetails",
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            GroupTransparency = CL.BackgroundTransparency,
+            ZIndex = 1,
+        })
+        round(sideDecor, 16)
+        brackets(sideDecor, 12, 15, 0.35)
+        label(sideDecor, "RELEASE NOTES", {
+            Position = UDim2.new(0.1, 0, 0.035, 0),
+            Size = UDim2.new(0.8, 0, 0.02, 0),
+            TextColor3 = Theme.Gold,
+            TextTransparency = 0.2,
+        }, 9)
+        local releaseBox = make("Frame", sideDecor, {
+            Position = UDim2.new(0.1, 0, 0.79, 0),
+            Size = UDim2.new(0.8, 0, 0.14, 0),
+            BackgroundColor3 = Color3.fromRGB(30, 32, 36),
+            ZIndex = 3,
+        })
+        round(releaseBox, 10)
+        outline(releaseBox, 1, 0.75)
+        label(releaseBox, "10.7.0", {
+            Position = UDim2.new(0.1, 0, 0.13, 0),
+            Size = UDim2.new(0.8, 0, 0.4, 0),
+            TextColor3 = Theme.PaleGold,
+        }, 25)
+        label(releaseBox, "HOTEL UPDATE", {
+            Position = UDim2.new(0.1, 0, 0.64, 0),
+            Size = UDim2.new(0.8, 0, 0.17, 0),
+            TextColor3 = Theme.Gold,
+        }, 9)
+        connect(CL:GetPropertyChangedSignal("BackgroundTransparency"), function()
+            sideDecor.GroupTransparency = CL.BackgroundTransparency
+        end)
+
+        local mobileNotes = make("Frame", BC, {
+            Name = "GildedCompactChangelog",
+            LayoutOrder = 5,
+            Size = UDim2.new(0.96, 0, 0, 238),
+            BackgroundColor3 = Theme.White,
+            Visible = false,
+            ZIndex = 4,
+        })
+        round(mobileNotes, 12)
+        gradient(mobileNotes, panelColors, 110)
+        outline(mobileNotes, 1, 0.5)
+        label(mobileNotes, CLTitle.Text, {
+            Position = UDim2.new(0.07, 0, 0, 16),
+            Size = UDim2.new(0.86, 0, 0, 25),
+            TextColor3 = Theme.PaleGold,
+        }, 20)
+        local mobileBody = label(mobileNotes, CLText.Text, {
+            Position = UDim2.new(0.07, 0, 0, 53),
+            Size = UDim2.new(0.86, 0, 1, -72),
+            TextWrapped = true,
+            TextYAlignment = Enum.TextYAlignment.Top,
+        }, 16)
+        connect(CLText:GetPropertyChangedSignal("Text"), function()
+            mobileBody.Text = CLText.Text
+        end)
+
+        local CreditsFont = InterfaceFont
+        local authorLines = {
+            "Original Author: Noonie & Ping",
+            "Version Opener: Pyxl [Hatsune Miku]",
+            "Sources Some Textures/Audio: Hardcore reignites & SCP & The Foundation",
+            "Early Authors: Fox-55 & Jollis & MR.KEY",
+            "Current Author : HeavenNow & Number303",
+            "Special Thanks! : Opinions and submissions from all creators",
+            "Thanks for playing!",
+        }
+        local authorGradients, authorLabels = {}, {}
+        local authorPanel = make("CanvasGroup", SG, {
+            Name = "GildedAuthorsPanel",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.8, 0, 1.5, 0),
+            Size = UDim2.new(0, 360, 0, 600),
+            BackgroundTransparency = 1,
+            GroupTransparency = 1,
+            Visible = false,
+            ZIndex = 2,
+        })
+        round(authorPanel, 17)
+        local authorSurface = make("Frame", authorPanel, {
+            Position = UDim2.new(0, 2, 0, 2),
+            Size = UDim2.new(1, -4, 1, -4),
+            BackgroundColor3 = Theme.White,
+            ZIndex = 1,
+        })
+        round(authorSurface, 16)
+        gradient(authorSurface, panelColors, 105)
+        local authorStroke = outline(authorSurface, 1.5, 0.12, Theme.White)
+        local authorBorderGradient = gradient(authorStroke, metalColors, 120)
+        brackets(authorSurface, 12, 17, 0.3)
+        label(authorSurface, "THE PEOPLE BEHIND HARDCORE", {
+            FontFace = CreditsFont,
+            Position = UDim2.new(0.08, 0, 0, 22),
+            Size = UDim2.new(0.84, 0, 0, 15),
+            TextColor3 = Theme.Gold,
+        }, 9)
+        label(authorSurface, "Credits", {
+            FontFace = CreditsFont,
+            Position = UDim2.new(0.08, 0, 0, 43),
+            Size = UDim2.new(0.84, 0, 0, 31),
+            TextColor3 = Theme.PaleGold,
+        }, 25)
+        local authorDivider = make("Frame", authorSurface, {
+            Position = UDim2.new(0.08, 0, 0, 88),
+            Size = UDim2.new(0.84, 0, 0, 1),
+            BackgroundColor3 = Theme.White,
+            ZIndex = 3,
+        })
+        gradient(authorDivider, {Theme.Gold, Theme.Ice, Theme.Bronze}, 0)
+        local authorScroll = make("ScrollingFrame", authorSurface, {
+            Name = "AuthorCreditsScroll",
+            Position = UDim2.new(0.07, 0, 0, 103),
+            Size = UDim2.new(0.86, 0, 1, -125),
+            BackgroundTransparency = 1,
+            ScrollBarThickness = 3,
+            ScrollBarImageColor3 = Theme.Gold,
+            ScrollBarImageTransparency = 0.2,
+            ScrollingDirection = Enum.ScrollingDirection.Y,
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            Active = true,
+            ZIndex = 5,
+        })
+        make("UIListLayout", authorScroll, {
+            Padding = UDim.new(0, 15),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+        })
+        make("UIPadding", authorScroll, {
+            PaddingTop = UDim.new(0, 5),
+            PaddingBottom = UDim.new(0, 15),
+            PaddingLeft = UDim.new(0, 5),
+            PaddingRight = UDim.new(0, 8),
+        })
+        local mobileAuthors = make("Frame", BC, {
+            Name = "GildedCompactAuthors",
+            LayoutOrder = 6,
+            Size = UDim2.new(0.96, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = Theme.White,
+            Visible = false,
+            ZIndex = 4,
+        })
+        round(mobileAuthors, 12)
+        gradient(mobileAuthors, panelColors, 105)
+        outline(mobileAuthors, 1, 0.42)
+        make("UIListLayout", mobileAuthors, {
+            Padding = UDim.new(0, 14),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+        })
+        make("UIPadding", mobileAuthors, {
+            PaddingTop = UDim.new(0, 18),
+            PaddingBottom = UDim.new(0, 20),
+            PaddingLeft = UDim.new(0, 18),
+            PaddingRight = UDim.new(0, 18),
+        })
+        label(mobileAuthors, "Credits", {
+            FontFace = CreditsFont,
+            Name = "CompactCreditsTitle",
+            LayoutOrder = 0,
+            Size = UDim2.new(1, 0, 0, 30),
+            TextColor3 = Theme.PaleGold,
+        }, 23)
+        local function addAuthorRows(parent)
+            for index, text in ipairs(authorLines) do
+                local row = label(parent, text, {
+                    FontFace = CreditsFont,
+                    Name = "AuthorCredit" .. index,
+                    LayoutOrder = index,
+                    Size = UDim2.new(1, 0, 0, 25),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    TextScaled = false,
+                    TextSize = 16,
+                    TextWrapped = true,
+                    TextYAlignment = Enum.TextYAlignment.Top,
+                    TextColor3 = Theme.White,
+                }, 18)
+                table.insert(authorLabels, row)
+                table.insert(authorGradients, gradient(row,
+                    {Theme.Gold, Theme.PaleGold, Theme.Gold}, index * 8))
+            end
+        end
+        addAuthorRows(authorScroll)
+        addAuthorRows(mobileAuthors)
+        local authorCenterX = 0
+        local function syncAuthorPanel()
+            if not authorPanel.Parent then return end
+            authorPanel.Position = UDim2.new(0, authorCenterX,
+                MC.Position.Y.Scale, MC.Position.Y.Offset)
+            authorPanel.GroupTransparency = 1 - math.clamp(
+                (1 - BG.BackgroundTransparency) / 0.5, 0, 1)
+        end
+        connect(MC:GetPropertyChangedSignal("Position"), syncAuthorPanel)
+        connect(BG:GetPropertyChangedSignal("BackgroundTransparency"), syncAuthorPanel)
+        connect(mobileAuthors:GetPropertyChangedSignal("AbsoluteSize"), updateScrollCanvas)
+
+        local cursorGradient
+        stylePopupCursor = function()
+            if not customCursor or not customCursor.Parent then return end
+            customCursor.BackgroundTransparency = 1
+            customCursor.Visible = not (UIS.TouchEnabled and not UIS.MouseEnabled)
+            local cursorStroke = customCursor:FindFirstChildOfClass("UIStroke")
+            if cursorStroke then
+                cursorStroke.Color, cursorStroke.Thickness = Theme.White, 1.3
+                cursorStroke.Transparency = 0.12
+                cursorGradient = gradient(cursorStroke, metalColors, 0)
+            end
+            local dot = make("Frame", customCursor, {
+                Name = "GildedCursorDot",
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.new(0.5, 0, 0.5, 0),
+                Size = UDim2.new(0, 3, 0, 3),
+                BackgroundColor3 = Theme.PaleGold,
+                ZIndex = 10000,
+            })
+            round(dot, 3)
+        end
+        stylePopupCursor()
+
+        local mainDisplayScale = make("UIScale", MC, {Scale = 1})
+        local logDisplayScale = make("UIScale", CL, {Scale = 1})
+        local authorDisplayScale = make("UIScale", authorPanel, {Scale = 1})
+        local creditDisplayScale = make("UIScale", otsCredit, {Scale = 1})
+        local function layoutTheme()
+            if not alive or not SG.Parent then return end
+            local actualWidth, actualHeight = ContentViewport.AbsoluteSize.X, ContentViewport.AbsoluteSize.Y
+            if actualWidth <= 0 or actualHeight <= 0 then return end
+            local touchOnly = UIS.TouchEnabled and not UIS.MouseEnabled
+            local displayScale
+            if touchOnly then
+                local portrait = actualHeight >= actualWidth
+                displayScale = math.clamp(math.min(
+                    actualWidth / (portrait and 430 or 900),
+                    actualHeight / (portrait and 880 or 430)), 1, 3)
+            else
+                displayScale = math.clamp(math.min(actualWidth / 1920, actualHeight / 1080), 1, 2)
+            end
+            mainDisplayScale.Scale, logDisplayScale.Scale = displayScale, displayScale
+            authorDisplayScale.Scale, creditDisplayScale.Scale = displayScale, displayScale
+            popupDisplayScale = displayScale
+            panltBaseScale = displayScale
+            panltLauncherScale.Scale = displayScale
+            local width, height = actualWidth / displayScale, actualHeight / displayScale
+            local compact = touchOnly or width < 1180 or width / height < 1.45
+                or (UIS.TouchEnabled and height < 640)
+            local short = height < 520
+            local topMargin = short and 12 or 56
+            local bottomMargin = 42
+            local panelHeight = math.max(100,
+                math.min(780, height - topMargin - bottomMargin))
+            local centerY = (height + topMargin - bottomMargin) / 2
+            local mainWidth, mainCenterX, logWidth, logCenterX, authorWidth
+            if compact then
+                mainWidth = math.min(620, math.max(100, width - 28))
+                mainCenterX = width / 2
+                logWidth, logCenterX, authorWidth = 260, width / 2, 320
+                authorCenterX = width / 2
+                CL.Visible, authorPanel.Visible = false, false
+                mobileNotes.Visible, mobileAuthors.Visible = true, true
+                footerHint.Text = UIS.TouchEnabled
+                    and "SWIPE TO EXPLORE" or "SCROLL TO EXPLORE  /  ESC TO CLOSE"
+            else
+                local totalWidth = math.min(1480, width - 64)
+                local gap = math.clamp(width * 0.012, 16, 24)
+                local available = totalWidth - 2 * gap
+                mainWidth, logWidth, authorWidth = available * 0.43,
+                    available * 0.235, available * 0.335
+                local left = (width - totalWidth) / 2
+                mainCenterX = left + mainWidth / 2
+                logCenterX = left + mainWidth + gap + logWidth / 2
+                authorCenterX = left + mainWidth + gap + logWidth + gap + authorWidth / 2
+                CL.Visible, authorPanel.Visible = true, true
+                mobileNotes.Visible, mobileAuthors.Visible = false, false
+                footerHint.Text = "SCROLL TO EXPLORE  /  ESC TO CLOSE"
+            end
+            MC.AnchorPoint, CL.AnchorPoint = Vector2.new(0.5, 0.5), Vector2.new(0.5, 0.5)
+            MC.Size = UDim2.new(0, mainWidth, 0, panelHeight)
+            CL.Size = UDim2.new(0, logWidth, 0, panelHeight)
+            authorPanel.Size = UDim2.new(0, authorWidth, 0, panelHeight)
+            authorCenterX = authorCenterX * displayScale
+
+            local mainLeft = mainCenterX - mainWidth / 2
+            if not compact and mainLeft >= 130 then
+                panltPositionX = (mainLeft - 16 - 50) * displayScale
+                panltPositionYOffset = 0
+            else
+                panltPositionX = (mainLeft + 62) * displayScale
+                panltPositionYOffset = (-panelHeight / 2
+                    + (short and 76 or 112)) * displayScale
+            end
+            syncPANLTPosition()
+            mainOpenPosition = UDim2.new(0, mainCenterX * displayScale, 0, centerY * displayScale)
+            logOpenPosition = UDim2.new(0, logCenterX * displayScale, 0, centerY * displayScale)
+            mainClosedPosition = UDim2.new(0, mainCenterX * displayScale, 1,
+                (panelHeight / 2 + 40) * displayScale)
+            logClosedPosition = UDim2.new(0, logCenterX * displayScale, 1,
+                (panelHeight / 2 + 40) * displayScale)
+            if popupPhase == "preparing" or popupPhase == "closing" then
+                if popupPhase == "preparing" then
+                    MC.Position, CL.Position = mainClosedPosition, logClosedPosition
+                end
+            else
+                if mainMotionTween then mainMotionTween:Cancel() end
+                if logMotionTween then logMotionTween:Cancel() end
+                MC.Position, CL.Position = mainOpenPosition, logOpenPosition
+            end
+            syncAuthorPanel()
+            local closeSize = UIS.TouchEnabled and 44 or 28
+            CB.Size = UDim2.new(0, closeSize, 0, closeSize)
+            TL.Size = UDim2.new(UIS.TouchEnabled and 0.7 or 0.77, 0, 0.048, 0)
+            TI.Position = UDim2.new(0.05, 0, short and 0.18 or 0.133, 0)
+            TI.Size = UDim2.new(0.9, 0, short and 0.14 or 0.265, 0)
+            RecommendLabel.Position = UDim2.new(0.07, 0, short and 0.34 or 0.425, 0)
+            RecommendLabel.Size = UDim2.new(0.86, 0, short and 0.06 or 0.048, 0)
+            modeSectionLabel.Position = UDim2.new(0.055, 0, short and 0.415 or 0.493, 0)
+            modeCountLabel.Position = UDim2.new(0.52, 0, short and 0.415 or 0.493, 0)
+            ScrollFrame.Position = UDim2.new(0.05, 0, short and 0.45 or 0.53, 0)
+            ScrollFrame.Size = UDim2.new(0.9, 0, short and 0.48 or 0.4, 0)
+            ScrollFrame.Active = true
+            footerHint.AnchorPoint = Vector2.new(0.5, 1)
+            footerHint.Position = UDim2.new(0.5, 0, 1, -8)
+            footerHint.Size = UDim2.new(0.9, 0, 0, 12)
+            ambientTitle.Visible = not short
+            ambientTitle.Position = UDim2.new(0.08, 0, 0, 20)
+            ambientTitle.Size = UDim2.new(0.84, 0, 0, 18)
+            ambientFooter.Visible = not compact
+            ambientFooter.AnchorPoint = Vector2.new(0.5, 1)
+            ambientFooter.Position = UDim2.new(0.5, 0, 1, -16)
+            ambientFooter.Size = UDim2.new(0.6, 0, 0, 14)
+            otsCredit.Position = UDim2.new(0,
+                (width < 500 and 16 or 24) * displayScale, 1, -12 * displayScale)
+            local cardHeight = short and 64
+                or math.clamp(math.floor(panelHeight * 0.12), 72, 94)
+            for _, button in ipairs(buttons) do
+                button.Size = UDim2.new(0.96, 0, 0, cardHeight)
+            end
+            for _, row in ipairs(authorLabels) do
+                row.TextSize = compact and 16 or math.clamp(math.floor(authorWidth / 24), 14, 18)
+            end
+            updateScrollCanvas()
+        end
+        refreshPopupLayout = layoutTheme
+        connect(ContentViewport:GetPropertyChangedSignal("AbsoluteSize"), layoutTheme)
+        layoutTheme()
+
+        local function cleanup()
+            if not alive then return end
+            alive = false
+            refreshPopupLayout, stylePopupCursor = nil, nil
+            for _, connection in ipairs(connections) do
+                connection:Disconnect()
+            end
+            for _, animation in pairs(tweens) do
+                animation:Cancel()
+            end
+            table.clear(connections)
+            table.clear(tweens)
+        end
+        connect(SG.Destroying, cleanup)
+
+        if Theme.Motion then
+            local elapsed, accumulator = 0, 0
+            connect(RunService.RenderStepped, function(dt)
+                if not alive then return end
+                if not SG.Parent then cleanup() return end
+                if not SG.Enabled then return end
+                elapsed, accumulator = elapsed + dt, accumulator + dt
+                if accumulator < 1 / Theme.AnimationFPS then return end
+                accumulator = accumulator % (1 / Theme.AnimationFPS)
+                panltGoldBase.Rotation = (elapsed * 20) % 360
+                panltGoldGradient.Rotation = 25 + math.sin(elapsed * 0.5) * 12
+                mainBorderGradient.Rotation = (20 + elapsed * 16) % 360
+                sideBorderGradient.Rotation = (160 - elapsed * 12) % 360
+                authorBorderGradient.Rotation = (120 + elapsed * 14) % 360
+                for index, goldGradient in ipairs(authorGradients) do
+                    goldGradient.Offset = Vector2.new(math.sin(elapsed * 0.5 + index * 0.23) * 0.18, 0)
+                end
+                mainGradient.Rotation = 115 + math.sin(elapsed * 0.15) * 9
+                creditGradient.Offset = Vector2.new(math.sin(elapsed * 0.55) * 0.3, 0)
+                titleGradient.Offset = Vector2.new(math.sin(elapsed * 0.65) * 0.22, 0)
+                recommendationGradient.Offset =
+                    Vector2.new(math.sin(elapsed * 0.55) * 0.18, 0)
+                scanner.Position = UDim2.new(0.04, 0, (elapsed * 0.13) % 1, 0)
+                for index, state in ipairs(cards) do
+                    state.sheen.Offset = Vector2.new(
+                        ((elapsed / 5.8 + index * 0.17) % 1) * 2.4 - 1.2, 0)
+                    state.borderGradient.Rotation =
+                        (index * 32 + elapsed * 10) % 360
+                end
+                for _, particle in ipairs(particles) do
+                    particle.object.Position = UDim2.new(particle.x,
+                        math.sin(elapsed * 0.35 + particle.phase) * 12,
+                        (particle.y - elapsed * particle.speed) % 1, 0)
+                    particle.fade.base = 0.62
+                        + math.sin(elapsed * 0.8 + particle.phase) * 0.15
+                    particle.object.BackgroundTransparency =
+                        1 - (1 - particle.fade.base) * backgroundVisibility
+                end
+                if cursorGradient and cursorGradient.Parent then
+                    cursorGradient.Rotation = (elapsed * 70) % 360
+                end
+            end)
+        end
+    end
+end
+
+
+whenBossTimeReady(function(success)
+    if not SG.Parent then return end
+    if not success then
+        SG:Destroy()
+        return
+    end
+    SG.Enabled = true
+    if refreshPopupLayout then refreshPopupLayout() end
+    KJ4()
+    if SG.Parent and not startBossTimeMusic() then KJ5() end
+end)
+
